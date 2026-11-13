@@ -45,10 +45,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         headerItem?.title = nowPlayingTitle
 
-        guard let track = player.trackTitle, let trackItem else { return }
+        guard let trackItem else { return }
         // Text only. Assigning `toolTip` to a menu item while its menu is open
         // makes AppKit try to show a tooltip panel mid-tracking, which throws
         // and aborts the app. The tooltip is refreshed when the menu is rebuilt.
+        guard let track = player.trackTitle else {
+            // The station moved on to news or an ad: clear the row rather than
+            // leaving the previous song sitting there.
+            trackItem.attributedTitle = NSAttributedString(string: "")
+            return
+        }
         trackItem.attributedTitle = Self.trackTitle(track)
     }
 
