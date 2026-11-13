@@ -17,7 +17,9 @@ struct Station: Codable {
     }
 
     static func streamURL(from urlString: String) -> URL? {
-        guard let url = URL(string: urlString), isPlayable(url) else { return nil }
+        // Pasting can carry stray whitespace or line breaks; URLs can't contain them.
+        let cleaned = urlString.filter { !$0.isWhitespace }
+        guard let url = URL(string: cleaned), isPlayable(url) else { return nil }
         return url
     }
 
