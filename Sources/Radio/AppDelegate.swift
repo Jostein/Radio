@@ -3,6 +3,7 @@ import AppKit
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let store = StationStore()
     private let player = RadioPlayer()
+    private let systemNowPlaying = SystemNowPlaying()
     private let menu = NSMenu()
 
     private var statusItem: NSStatusItem!
@@ -22,6 +23,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         store.onChange = { [weak self] in self?.refreshStatusItem() }
         player.onChange = { [weak self] in self?.refreshStatusItem() }
+        systemNowPlaying.install(player: player)
 
         refreshStatusItem()
     }
@@ -36,6 +38,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 .compactMap { $0 }
                 .joined(separator: " — ")
         } ?? "Radio"
+
+        systemNowPlaying.update(
+            station: player.current?.title,
+            track: player.trackTitle,
+            isPlaying: player.isActive
+        )
 
         refreshOpenMenuItems()
     }

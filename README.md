@@ -34,6 +34,8 @@ browser tab.
   block those endpoints (SomaFM, Radio Paradise, the FIP webradios) have their
   own feeds built in. Anything else simply shows no track.
   Clicking the track line opens a YouTube search for it in your default browser.
+  The station and track also appear in macOS's Now Playing panel, so Control
+  Center, the keyboard media keys and AirPods play/pause all work.
 - **Volume** slider in the menu, remembered between launches (defaults to 100%).
 
 ## Requirements

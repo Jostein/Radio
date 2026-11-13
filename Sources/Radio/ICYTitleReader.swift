@@ -11,17 +11,7 @@ import Foundation
 /// cancellation callback of an abandoned read (which arrives *after* the next
 /// read has started) cannot finish or tear down the newer one.
 final class ICYTitleReader: NSObject, URLSessionDataDelegate {
-    enum Result {
-        case title(String)
-        /// The stream answered, but published no song title — news, ads, a
-        /// jingle, or a station that puts nothing in the metadata block.
-        case empty
-        /// Metadata could not be read: no `icy-metaint`, an error, or a stream
-        /// that accepted the connection and then said nothing.
-        case unavailable
-    }
-
-    private var completion: ((Result) -> Void)?
+    private var completion: ((TrackUpdate) -> Void)?
     private var session: URLSession?
     private var currentTask: URLSessionDataTask?
     private var activeRead: UUID?
@@ -32,7 +22,7 @@ final class ICYTitleReader: NSObject, URLSessionDataDelegate {
     private var buffer: [UInt8] = []
     private var finished = true
 
-    func readTitle(from url: URL, timeout: TimeInterval = 12, completion: @escaping (Result) -> Void) {
+    func readTitle(from url: URL, timeout: TimeInterval = 12, completion: @escaping (TrackUpdate) -> Void) {
         stop()
 
         let read = UUID()
@@ -137,7 +127,7 @@ final class ICYTitleReader: NSObject, URLSessionDataDelegate {
             if let title = Self.streamTitle(in: block) {
                 finish(with: .title(title))
             } else {
-                finish(with: .empty)
+                finish(with: .noTitle)
             }
         }
     }
@@ -160,7 +150,7 @@ final class ICYTitleReader: NSObject, URLSessionDataDelegate {
         return title.isEmpty ? nil : title
     }
 
-    private func finish(with result: Result) {
+    private func finish(with result: TrackUpdate) {
         guard !finished else { return }
         finished = true
         activeRead = nil
