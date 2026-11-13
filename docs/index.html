@@ -345,7 +345,8 @@ make run</pre>
       <div class="notice">
         <h3>It might not work on your desktop</h3>
         <p>
-          It needs Rust, <code>ffmpeg</code>, and on Linux GTK 3 with libayatana-appindicator — plus
+          It needs Rust and <code>ffmpeg</code>, which on Windows are two <code>winget</code> lines and
+          nothing more; on Linux they come with GTK 3 and libayatana-appindicator — plus
           <code>xdotool</code> on Arch, because the tray library links <code>libxdo</code>. If the icon never
           appears, the menu opens in the wrong place, or the Windows media flyout stays empty, that is a
           known risk of a port that has run in a container and a VM, never on a real desktop.
@@ -355,7 +356,11 @@ make run</pre>
           README lists the parts that were never exercised. Open the repository with an AI coding agent,
           run it, paste what you see, and ask it to fix that one thing.
         </p>
-        <pre><span class="c"># Linux or Windows, from the repository root</span>
+        <pre><span class="c"># Windows: two installs, then the same two lines</span>
+winget install Rustlang.Rustup
+winget install Gyan.FFmpeg
+
+<span class="c"># either system, from the repository root</span>
 cd Platforms
 cargo run -p radio --release</pre>
       </div>

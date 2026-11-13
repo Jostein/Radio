@@ -100,7 +100,9 @@ cd Platforms
 cargo run -p radio --release
 ```
 
-Windows needs Rust and ffmpeg. Linux needs those plus GTK 3,
+Windows needs Rust and ffmpeg, and nothing else — `winget install
+Rustlang.Rustup` and `winget install Gyan.FFmpeg` cover both, with the MSVC
+build tools that rustup offers to install. Linux needs those plus GTK 3,
 libayatana-appindicator and, on Arch, `xdotool` — the tray library links
 `libxdo`. The port's own [`README`](Platforms/README.md) has the per-distro
 packages, the parity matrix, and the list of expected failure points.
