@@ -85,8 +85,17 @@ small, plain Rust codebase whose README names the parts that were never
 exercised, which makes it a good job for an AI coding agent: open the
 repository, run it, paste what you see, and ask for that one thing to be fixed.
 
-The port's own [`README`](Platforms/README.md) has the per-distro dependencies,
-the build commands, the parity matrix, and the list of expected failure points.
+On either system, from the repository root:
+
+```sh
+cd Platforms
+cargo run -p radio --release
+```
+
+Windows needs Rust and ffmpeg. Linux needs those plus GTK 3,
+libayatana-appindicator and, on Arch, `xdotool` — the tray library links
+`libxdo`. The port's own [`README`](Platforms/README.md) has the per-distro
+packages, the parity matrix, and the list of expected failure points.
 
 ## Keyboard
 

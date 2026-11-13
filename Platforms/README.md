@@ -57,11 +57,37 @@ and Windows. Same behaviour, one shared codebase.
 
 ## If it does not work
 
-This port was written with an AI coding agent, and that is the shortest route to a
-fix: open the repository in one, run it, paste what the menu shows you, and ask
-for that one thing. The known gaps at the bottom name the parts most likely to be
-wrong, so pointing at an item from that list is enough to start. An issue works
-too — say which system, which panel or desktop, and what happened.
+If the icon never appears, the menu opens somewhere odd, or a station will not
+start, that is the port being young, not you. Most of it has run on exactly one
+desktop, so your machine is allowed to be the second one that disagrees.
+
+Start it from the repository root:
+
+```sh
+cd Platforms
+cargo run -p radio --release
+```
+
+Then collect three small things, which is usually enough to find the cause:
+
+```sh
+# Linux
+echo "$XDG_CURRENT_DESKTOP"                 # GNOME, KDE, Hyprland, sway, ...
+command -v ffmpeg && ffmpeg -version | head -1
+playerctl -p radio status                   # only while the app is running
+```
+
+```powershell
+# Windows
+echo $env:APPDATA
+ffmpeg -version
+```
+
+Paste that with one sentence about what you saw. The quickest route to a fix is
+an AI coding agent: open the repository in one, say what happened, and ask for
+that one thing — the known gaps at the bottom name the parts most likely to be
+wrong, so an item from that list is enough to start. An issue works just as
+well.
 
 ## What is shared and what is not
 
