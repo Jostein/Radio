@@ -5,6 +5,7 @@
 
 pub mod feeds;
 pub mod icy;
+pub mod metadata;
 pub mod monitor;
 pub mod playlist;
 pub mod search;
@@ -13,6 +14,7 @@ pub mod store;
 pub mod title;
 
 pub use icy::TrackUpdate;
+pub use metadata::suggested_title;
 pub use monitor::{Monitor, Update};
 pub use station::Station;
 pub use store::Store;
