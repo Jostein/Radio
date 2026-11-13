@@ -81,13 +81,19 @@ final class NowPlayingMonitor: NSObject {
     private func pollICY() {
         guard let url = icyURL else { return }
 
-        icyReader.readTitle(from: url) { [weak self] title in
+        icyReader.readTitle(from: url) { [weak self] result in
             guard let self, self.icyURL == url else { return }
 
-            if let title {
+            switch result {
+            case .title(let title):
                 self.retriesLeft = Self.maxICYRetries
                 self.setTitle(title)
-            } else {
+            case .empty:
+                // News, ads or a jingle: the station is publishing no song, so
+                // drop the last one instead of showing it indefinitely.
+                self.retriesLeft = Self.maxICYRetries
+                self.setTitle(nil)
+            case .unavailable:
                 // Busy or slow servers often answer on the next attempt; without
                 // this a station shows no track until the 30s refresh.
                 self.scheduleICYRetry(for: url)

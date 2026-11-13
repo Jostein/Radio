@@ -11,7 +11,17 @@ import Foundation
 /// cancellation callback of an abandoned read (which arrives *after* the next
 /// read has started) cannot finish or tear down the newer one.
 final class ICYTitleReader: NSObject, URLSessionDataDelegate {
-    private var completion: ((String?) -> Void)?
+    enum Result {
+        case title(String)
+        /// The stream answered, but published no song title — news, ads, a
+        /// jingle, or a station that puts nothing in the metadata block.
+        case empty
+        /// Metadata could not be read: no `icy-metaint`, an error, or a stream
+        /// that accepted the connection and then said nothing.
+        case unavailable
+    }
+
+    private var completion: ((Result) -> Void)?
     private var session: URLSession?
     private var currentTask: URLSessionDataTask?
     private var activeRead: UUID?
@@ -22,7 +32,7 @@ final class ICYTitleReader: NSObject, URLSessionDataDelegate {
     private var buffer: [UInt8] = []
     private var finished = true
 
-    func readTitle(from url: URL, timeout: TimeInterval = 12, completion: @escaping (String?) -> Void) {
+    func readTitle(from url: URL, timeout: TimeInterval = 12, completion: @escaping (Result) -> Void) {
         stop()
 
         let read = UUID()
@@ -51,15 +61,15 @@ final class ICYTitleReader: NSObject, URLSessionDataDelegate {
         // Never wait on a stream that accepts connections but sends nothing.
         let work = DispatchWorkItem { [weak self] in
             guard let self, self.activeRead == read else { return }
-            self.finish(with: nil)
+            self.finish(with: .unavailable)
         }
         timeoutWorkItem = work
         DispatchQueue.main.asyncAfter(deadline: .now() + timeout, execute: work)
     }
 
-    /// Abandons the current read without reporting a title.
+    /// Abandons the current read without reporting anything.
     func stop() {
-        finish(with: nil)
+        finish(with: .unavailable)
     }
 
     // MARK: - URLSession
@@ -84,7 +94,7 @@ final class ICYTitleReader: NSObject, URLSessionDataDelegate {
         else {
             // Not an ICY stream (HLS, plain file, error): nothing to read.
             completionHandler(.cancel)
-            finish(with: nil)
+            finish(with: .unavailable)
             return
         }
 
@@ -111,7 +121,7 @@ final class ICYTitleReader: NSObject, URLSessionDataDelegate {
             let blockLength = Int(lengthByte) * 16
 
             if blockLength == 0 {
-                // No metadata this interval.
+                // No metadata in this interval; read on for the next block.
                 buffer.removeFirst(1)
                 remainingAudioBytes = metaint
                 continue
@@ -123,15 +133,18 @@ final class ICYTitleReader: NSObject, URLSessionDataDelegate {
             buffer.removeFirst(blockLength + 1)
             remainingAudioBytes = metaint
 
+            // An empty block is an answer: the station has no song right now.
             if let title = Self.streamTitle(in: block) {
-                finish(with: title)
+                finish(with: .title(title))
+            } else {
+                finish(with: .empty)
             }
         }
     }
 
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
         guard task === currentTask else { return }
-        finish(with: nil)
+        finish(with: .unavailable)
     }
 
     // MARK: - Parsing
@@ -147,7 +160,7 @@ final class ICYTitleReader: NSObject, URLSessionDataDelegate {
         return title.isEmpty ? nil : title
     }
 
-    private func finish(with title: String?) {
+    private func finish(with result: Result) {
         guard !finished else { return }
         finished = true
         activeRead = nil
@@ -163,6 +176,6 @@ final class ICYTitleReader: NSObject, URLSessionDataDelegate {
 
         let completion = self.completion
         self.completion = nil
-        completion?(title)
+        completion?(result)
     }
 }
