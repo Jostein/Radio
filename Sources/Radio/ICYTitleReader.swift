@@ -6,19 +6,27 @@ import Foundation
 /// reaching it means reading (and discarding) the audio before it. This reader
 /// takes exactly one block and hangs up; the caller re-reads periodically
 /// instead of keeping a second full copy of the stream open.
+///
+/// Only one read is active at a time. Each read carries an identity so the
+/// cancellation callback of an abandoned read (which arrives *after* the next
+/// read has started) cannot finish or tear down the newer one.
 final class ICYTitleReader: NSObject, URLSessionDataDelegate {
     private var completion: ((String?) -> Void)?
     private var session: URLSession?
-    private var task: URLSessionDataTask?
+    private var currentTask: URLSessionDataTask?
+    private var activeRead: UUID?
+    private var timeoutWorkItem: DispatchWorkItem?
 
     private var metaint = 0
     private var remainingAudioBytes = 0
     private var buffer: [UInt8] = []
-    private var finished = false
+    private var finished = true
 
     func readTitle(from url: URL, timeout: TimeInterval = 12, completion: @escaping (String?) -> Void) {
         stop()
 
+        let read = UUID()
+        activeRead = read
         finished = false
         metaint = 0
         remainingAudioBytes = 0
@@ -37,12 +45,16 @@ final class ICYTitleReader: NSObject, URLSessionDataDelegate {
         request.setValue("Radio/1.0 (macOS)", forHTTPHeaderField: "User-Agent")
 
         let task = session.dataTask(with: request)
-        self.task = task
+        currentTask = task
         task.resume()
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + timeout) { [weak self] in
-            self?.finish(with: nil)
+        // Never wait on a stream that accepts connections but sends nothing.
+        let work = DispatchWorkItem { [weak self] in
+            guard let self, self.activeRead == read else { return }
+            self.finish(with: nil)
         }
+        timeoutWorkItem = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + timeout, execute: work)
     }
 
     /// Abandons the current read without reporting a title.
@@ -58,6 +70,11 @@ final class ICYTitleReader: NSObject, URLSessionDataDelegate {
         didReceive response: URLResponse,
         completionHandler: @escaping (URLSession.ResponseDisposition) -> Void
     ) {
+        guard dataTask === currentTask else {
+            completionHandler(.cancel)
+            return
+        }
+
         guard
             let http = response as? HTTPURLResponse,
             let header = http.value(forHTTPHeaderField: "icy-metaint"),
@@ -77,7 +94,7 @@ final class ICYTitleReader: NSObject, URLSessionDataDelegate {
     }
 
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
-        guard metaint > 0, !finished else { return }
+        guard dataTask === currentTask, metaint > 0, !finished else { return }
         buffer.append(contentsOf: data)
 
         while !finished {
@@ -113,6 +130,7 @@ final class ICYTitleReader: NSObject, URLSessionDataDelegate {
     }
 
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        guard task === currentTask else { return }
         finish(with: nil)
     }
 
@@ -132,9 +150,13 @@ final class ICYTitleReader: NSObject, URLSessionDataDelegate {
     private func finish(with title: String?) {
         guard !finished else { return }
         finished = true
+        activeRead = nil
 
-        task?.cancel()
-        task = nil
+        timeoutWorkItem?.cancel()
+        timeoutWorkItem = nil
+
+        currentTask?.cancel()
+        currentTask = nil
         session?.invalidateAndCancel()
         session = nil
         buffer.removeAll(keepingCapacity: false)
