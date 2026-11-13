@@ -1,7 +1,13 @@
 # Radio for Linux and Windows
 
-A port of the macOS menu bar player to Linux (target: Omarchy / Arch + Hyprland)
-and Windows. Same behaviour, one shared codebase.
+The Linux and Windows side of the app: one shared Rust codebase, the same
+behaviour as the macOS build in the repository root. A tray icon instead of a
+menu bar item, MPRIS or SMTC instead of Now Playing, `~/.config/Radio` or
+`%APPDATA%\Radio` instead of `~/Library/Application Support/Radio`.
+
+The macOS build is documented in the [root README](../README.md). All three are
+meant to behave alike; this file records where the evidence for these two
+currently stops.
 
 > **Status: runs on Linux, builds and tests itself on Windows.** Verified with
 > Rust 1.100:

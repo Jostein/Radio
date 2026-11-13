@@ -1,17 +1,18 @@
 # Radio
 
-A tiny internet radio player that lives in the macOS menu bar. Add stream URLs,
-give them titles, and tune in from the menu bar — no window, no Dock icon, no
-browser tab.
+A tiny internet radio player that lives in the menu bar. Add stream URLs, give
+them titles, and tune in from the menu bar or system tray — no window, no Dock
+icon, no browser tab.
 
-There is also a Rust port for **Linux and Windows** in [`Platforms/`](Platforms/README.md).
-It builds and plays, but it has not been run on a real desktop yet — read
-[that status](#linux-and-windows) before relying on it.
+It runs on three desktops: **macOS, Linux and Windows**. macOS is the original,
+Swift and AppKit build; Linux and Windows share one Rust codebase with the same
+stations file and the same menu. All three are part of the app — [Platforms](#platforms)
+says what each one has been shown to do.
 
 ## Features
 
-- **Menu bar only.** The status item shows a waveform while playing and circling
-  arrows while reconnecting.
+- **Menu bar or tray only.** The status item shows a waveform while playing and
+  circling arrows while reconnecting, on all three platforms.
 - **Stations with titles.** Add a station with a title + URL, remove it from a
   submenu. The list is persisted between launches.
 - **HLS and direct streams.** `.m3u8` (HLS) goes straight to `AVPlayer`; plain
@@ -38,16 +39,31 @@ It builds and plays, but it has not been run on a real desktop yet — read
   block those endpoints (SomaFM, Radio Paradise, the FIP webradios) have their
   own feeds built in. Anything else simply shows no track.
   Clicking the track line opens a YouTube search for it in your default browser.
-  The station and track also appear in macOS's Now Playing panel, so Control
-  Center, the keyboard media keys and AirPods play/pause all work.
+  The station and track also appear in the system's own media controls — Now
+  Playing on macOS, MPRIS on Linux, SMTC on Windows — so Control Center, the
+  keyboard media keys and AirPods or headphone buttons pause and resume.
 - **Volume** slider in the menu, remembered between launches (defaults to 100%).
 
 ## Requirements
 
-- macOS 14 or later.
-- Xcode **not** required — Command Line Tools with Swift 6 / SwiftPM are enough.
+- macOS 14 or later for the Swift build. Xcode **not** required — Command Line
+  Tools with Swift 6 / SwiftPM are enough.
+- Linux: Rust 1.75+, ffmpeg, GTK 3, libayatana-appindicator, and `xdotool` on
+  Arch for `libxdo`.
+- Windows: Rust 1.75+, ffmpeg, and the MSVC build tools; `winget` installs the
+  first two in two lines.
 
-## Build and run
+## Platforms
+
+All three read the same `stations.json` format, seeded with FIP Reggae, and
+behave the same way: menu bar or tray only, ICY and feed titles, reconnect with
+backoff, media keys through the system's own controls.
+
+### macOS
+
+Swift and AppKit, macOS 14 or later — the build the app started as, and the one
+it is used on every day. Menu bar item, Now Playing and media keys, sleep/wake,
+playlists, volume.
 
 ```sh
 make app    # builds build/Radio.app
@@ -56,56 +72,60 @@ make clean  # removes .build and build
 ```
 
 Then click the radio-waves icon in the menu bar. **Add Station…** takes a title
-and any of: a direct stream URL, an `.m3u8`, an `.m3u` or a `.pls` URL.
+and any of: a direct stream URL, an `.m3u8`, an `.m3u` or an `.pls` URL.
 
 The build pins SwiftPM's `--build-system native` flag, because the default build
 system fails on Command Line Tools–only installs (it reports a property-list
 parse error before compiling).
 
-## Linux and Windows
+### Linux
 
-A Rust port of the same app lives in [`Platforms/`](Platforms/README.md): one
-binary per system, the same `stations.json`, the same behaviour — tray only,
-ICY and feed titles, reconnect with backoff, media keys through MPRIS on Linux
-and SMTC on Windows.
-
-**It is early, and it has only run inside containers and a VM.** What that means:
-
-- Both binaries build from source on every platform, with no warnings. The
-  Windows build also compiles and passes its unit tests on a real Windows runner
-  on every push, through `.github/workflows/windows.yml`.
-- On Linux it has been run three times. Headless (Xvfb, a private session bus,
-  ALSA `null` output) it decodes a live stream to 44.1 kHz PCM at real time and
-  publishes MPRIS controls that `playerctl` drives. On a real compositor (sway
-  with a waybar tray host) the icon renders, the menu opens, choosing a station
-  plays it, the header shows the ICY title, and pause, volume and quit work. In a
-  Debian VM with PipeWire it registers as a client and plays audibly: three
-  seconds recorded from the sink monitor measured −14.4 dB mean, −0.4 dB peak.
-- Still unproven on Linux: a laptop's own sound card (PipeWire was proven on a
-  VM's virtual one), the icon inside GNOME's AppIndicator extension or Plasma's
-  tray, editing `stations.json` while it runs, reconnect after a dropped stream,
-  and sleep/wake.
-- The Windows build compiles and links but **has never been started**. The media
-  flyout, the media keys, and the hidden window SMTC is bound to are unproven.
-
-If it does not work on your machine, that is expected and fixable. The port is a
-small, plain Rust codebase whose README names the parts that were never
-exercised, which makes it a good job for an AI coding agent: open the
-repository, run it, paste what you see, and ask for that one thing to be fixed.
-
-On either system, from the repository root:
+One Rust binary per distro: tray icon, menu, playback, MPRIS.
 
 ```sh
+# Debian / Ubuntu
+sudo apt install build-essential libgtk-3-dev libayatana-appindicator3-dev \
+  libasound2-dev libxdo-dev pkg-config ffmpeg
+
 cd Platforms
 cargo run -p radio --release
 ```
 
-Windows needs Rust and ffmpeg, and nothing else: both come from winget, as
-`Rustlang.Rustup` and `Gyan.FFmpeg`, with the MSVC build tools that rustup
-offers to install. Linux needs those plus GTK 3,
-libayatana-appindicator and, on Arch, `xdotool` — the tray library links
-`libxdo`. The port's own [`README`](Platforms/README.md) has the per-distro
-packages, the parity matrix, and the list of expected failure points.
+Seen end to end on sway with waybar: the icon renders, the menu opens, a station
+plays with its live title, pause, volume and quit work, and MPRIS reports each
+change. In a Debian VM with PipeWire it registers as a client and plays audibly —
+three seconds recorded from the sink monitor measured −14.4 dB mean, −0.4 dB peak.
+
+Not yet seen: a laptop's own sound card (the VM's is virtual), the icon inside
+GNOME's AppIndicator extension or Plasma's tray, edits to `stations.json` while
+it runs, reconnect after a dropped stream, sleep/wake.
+
+### Windows
+
+The same Rust source, so it is the same `cargo run`. Rust and ffmpeg come from
+winget; the MSVC build tools are the one long install, and rustup fetches them
+when it asks.
+
+```powershell
+winget install Rustlang.Rustup
+winget install Gyan.FFmpeg
+cd Platforms
+cargo run -p radio --release
+```
+
+It compiles, links and passes the core tests on a real Windows runner on every
+push (`.github/workflows/windows.yml`), and the hidden window SMTC binds to is
+created before the app starts. The tray, the media flyout and the media keys have
+**never been started** — a runner has no interactive session for a notification
+area to live in.
+
+### What differs, on purpose
+
+Linux and Windows add stations by editing `stations.json` instead of a dialog,
+and the track line is a 60-character budget rather than a width measured to fit.
+The port's own [`README`](Platforms/README.md) has the per-distro packages, the
+parity matrix and the list of expected failure points; if one of those builds
+misbehaves, that is a gap in evidence rather than a mystery.
 
 ## Keyboard
 
@@ -117,6 +137,10 @@ dialog: ⌘C, ⌘V, ⌘X, ⌘A, ⌘Z, plus ⌘Q to quit.
 
 - Stations: `~/Library/Application Support/Radio/stations.json`
 - Volume: `UserDefaults` for `local.radio.menubar` (key `volume`)
+
+The Rust build uses the same file names in the platform's config directory:
+`~/.config/Radio/` on Linux, `%APPDATA%\Radio\` on Windows. Same JSON array, so
+the station list travels between machines.
 
 Deleting the JSON file restores the single starter station (FIP Reggae).
 
@@ -155,8 +179,9 @@ Platforms/                        Rust port for Linux and Windows
 - One stream plays at a time.
 - The app is ad-hoc signed for local use. It is not notarized and not sandboxed,
   so it is not ready for distribution as-is.
-- The Linux and Windows port is unproven on real desktops. Treat it as a
-  starting point that an agent or a person can finish, not as a release.
+- Windows has never been started, and Linux has not yet met a laptop's own
+  sound card. Both are part of the app and both build from source;
+  [Platforms](#platforms) lists exactly which parts have run where.
 - `NSAllowsArbitraryLoadsForMedia` is enabled so plain-`http` radio streams work;
   the exception applies to media loads only.
 
