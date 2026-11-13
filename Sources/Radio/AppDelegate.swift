@@ -184,7 +184,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         toggle.image = Self.symbol(player.isActive ? "pause.fill" : "play.fill")
         menu.addItem(toggle)
 
-        menu.addItem(volumeItem(width: sliderRowWidth()))
+        // The slider goes in last: AppKit only knows the menu's width once the
+        // text rows are in it, and the slider is a fixed-width custom view.
+        let sliderIndex = menu.numberOfItems
         menu.addItem(.separator())
 
         if store.stations.isEmpty {
@@ -220,6 +222,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let quit = NSMenuItem(title: "Quit Radio", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         quit.image = Self.symbol("power")
         menu.addItem(quit)
+
+        let width = max(Self.minimumSliderWidth, menu.size.width)
+        menu.insertItem(volumeItem(width: width), at: sliderIndex)
     }
 
     private func removalSubmenu() -> NSMenu {
@@ -233,26 +238,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return submenu
     }
 
-    /// The slider row is the widest thing in the menu unless a title outgrows
-    /// it, which leaves the slider looking short. Measure the text rows and
-    /// give the slider enough room to span whatever the menu will be.
-    private func sliderRowWidth() -> CGFloat {
-        var widest = Self.plainWidth(nowPlayingTitle)
-        if let track = player.trackTitle {
-            widest = max(widest, Self.trackTitle(track).size().width)
-        }
-        for station in store.stations {
-            widest = max(widest, Self.plainWidth(station.title))
-        }
-
-        // Text inset of a menu row (leading column plus trailing margin) and a
-        // little slack; overestimating only makes the row roomier, never short.
-        return min(max(240, widest + 38), 460)
-    }
-
-    private static func plainWidth(_ title: String) -> CGFloat {
-        (title as NSString).size(withAttributes: [.font: NSFont.menuFont(ofSize: 0)]).width
-    }
+    private static let minimumSliderWidth: CGFloat = 240
 
     private func volumeItem(width: CGFloat) -> NSMenuItem {
         let item = NSMenuItem()
