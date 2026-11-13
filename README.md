@@ -83,3 +83,9 @@ Sources/Radio/AddStationForm.swift  title/URL dialog with inline validation
   so it is not ready for distribution as-is.
 - `NSAllowsArbitraryLoadsForMedia` is enabled so plain-`http` radio streams work;
   the exception applies to media loads only.
+
+## License
+
+Released into the public domain under [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/)
+(SPDX: `CC0-1.0`) — see [LICENSE](LICENSE). No attribution required; do whatever
+you like with it, including commercial use.
