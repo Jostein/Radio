@@ -316,20 +316,21 @@ make run</pre>
     </section>
 
     <section id="nix">
-      <h2>Linux and Windows: early, unproven</h2>
+      <h2>Linux and Windows: early</h2>
       <p class="section-lede">
         The same app also exists as a Rust port for Linux and Windows: one binary per system,
-        the same stations file, the same behaviour. It builds and it plays, but nobody has run it
-        on a real desktop yet, so treat it as a starting point rather than a download.
+        the same stations file, the same behaviour. It builds and it plays, and its tray and menu
+        have now been seen on one desktop; the sound card and Windows have not, so treat it as a
+        starting point rather than a download.
       </p>
       <div class="grid">
         <div class="card">
           <h3>Where it stands</h3>
-          <p>Both binaries build from source. Run headless on Linux, it decodes a live stream at real time, reads ICY track titles, and appears in media widgets through MPRIS. The Windows build compiles and links, and has never been started.</p>
+          <p>Both binaries build from source, and the Windows one also passes its tests on a real Windows runner in CI. On Linux the tray icon renders in waybar, the menu opens with every item, and choosing a station plays it with the live track title in the header. Through MPRIS the same state reaches the desktop's media widget.</p>
         </div>
         <div class="card">
           <h3>What is unproven</h3>
-          <p>The tray icon, its menu and every click in it. That needs a real desktop, and a desktop needs a tray host: waybar, GNOME with the AppIndicator extension, Plasma, XFCE, Cinnamon or MATE.</p>
+          <p>Sound through a real PipeWire or PulseAudio server, the icon inside GNOME's AppIndicator extension or Plasma's tray, edits to <code>stations.json</code> while it runs, reconnect after a dropped stream, sleep and wake. And on Windows: everything at runtime — the tray, the media flyout, the media keys.</p>
         </div>
         <div class="card">
           <h3>Media keys, both ways</h3>
@@ -346,7 +347,7 @@ make run</pre>
           It needs Rust, <code>ffmpeg</code>, and on Linux GTK 3 with libayatana-appindicator — plus
           <code>xdotool</code> on Arch, because the tray library links <code>libxdo</code>. If the icon never
           appears, the menu opens in the wrong place, or the Windows media flyout stays empty, that is a
-          known risk of an untested port, not a mystery.
+          known risk of a port that has run on exactly one desktop, not a mystery.
         </p>
         <p>
           It is also fixable without waiting for anyone: the port is a small, plain Rust codebase whose
