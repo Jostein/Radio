@@ -4,6 +4,10 @@ A tiny internet radio player that lives in the macOS menu bar. Add stream URLs,
 give them titles, and tune in from the menu bar — no window, no Dock icon, no
 browser tab.
 
+There is also a Rust port for **Linux and Windows** in [`Platforms/`](Platforms/README.md).
+It builds and plays, but it has not been run on a real desktop yet — read
+[that status](#linux-and-windows) before relying on it.
+
 ## Features
 
 - **Menu bar only.** The status item shows a waveform while playing and circling
@@ -58,6 +62,32 @@ The build pins SwiftPM's `--build-system native` flag, because the default build
 system fails on Command Line Tools–only installs (it reports a property-list
 parse error before compiling).
 
+## Linux and Windows
+
+A Rust port of the same app lives in [`Platforms/`](Platforms/README.md): one
+binary per system, the same `stations.json`, the same behaviour — tray only,
+ICY and feed titles, reconnect with backoff, media keys through MPRIS on Linux
+and SMTC on Windows.
+
+**It is early, and not yet tested on a real desktop.** What that means:
+
+- Both binaries build from source on every platform, with no warnings.
+- The Linux binary has been run, headless (Xvfb, a private session bus, ALSA
+  `null` output): it starts, decodes a live stream to 44.1 kHz PCM at real time,
+  shows ICY track titles, and publishes MPRIS controls that `playerctl` drives.
+- The **tray icon, its menu and every click in it have never been seen** — a
+  container has no tray host. That is the part most likely to need a fix.
+- The Windows build compiles and links but **has never been started**. The media
+  flyout, the media keys, and the hidden window SMTC is bound to are unproven.
+
+If it does not work on your machine, that is expected and fixable. The port is a
+small, plain Rust codebase whose README names the parts that were never
+exercised, which makes it a good job for an AI coding agent: open the
+repository, run it, paste what you see, and ask for that one thing to be fixed.
+
+The port's own [`README`](Platforms/README.md) has the per-distro dependencies,
+the build commands, the parity matrix, and the list of expected failure points.
+
 ## Keyboard
 
 A status-bar app has no visible menu bar, but the app still installs a minimal
@@ -94,6 +124,8 @@ Sources/Radio/StationStore.swift  JSON-backed station list
 Sources/Radio/Station.swift       station model + URL validation
 Sources/Radio/AddStationForm.swift  title/URL dialog with inline validation
 docs/index.html                   landing page
+Platforms/                        Rust port for Linux and Windows
+                                  (see Platforms/README.md)
 ```
 
 ## Notes and limits
@@ -104,6 +136,8 @@ docs/index.html                   landing page
 - One stream plays at a time.
 - The app is ad-hoc signed for local use. It is not notarized and not sandboxed,
   so it is not ready for distribution as-is.
+- The Linux and Windows port is unproven on real desktops. Treat it as a
+  starting point that an agent or a person can finish, not as a release.
 - `NSAllowsArbitraryLoadsForMedia` is enabled so plain-`http` radio streams work;
   the exception applies to media loads only.
 

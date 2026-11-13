@@ -158,6 +158,18 @@
   pre .c { color: #7d8aa3; }
   .fineprint { color: var(--muted); font-size: 13px; margin: 14px 0 0; }
 
+  .notice {
+    margin-top: 18px;
+    padding: 20px 22px;
+    border: 1px solid rgba(240, 180, 41, 0.3);
+    border-radius: var(--radius);
+    background: linear-gradient(180deg, rgba(240, 180, 41, 0.09), rgba(240, 180, 41, 0.025));
+  }
+  .notice h3 { margin: 0 0 8px; font-size: 15.5px; letter-spacing: -0.01em; }
+  .notice p { margin: 0 0 10px; color: var(--muted); font-size: 14.5px; max-width: 68ch; }
+  .notice p:last-child { margin-bottom: 0; }
+  .notice pre { background: #10131c; }
+
   .license {
     margin-top: 78px;
     padding: 24px;
@@ -195,6 +207,7 @@
     <nav class="nav-links">
       <a href="#features">Features</a>
       <a href="#install">Install</a>
+      <a href="#nix">Linux &amp; Windows</a>
       <a class="gh" href="https://github.com/Jostein/Radio">GitHub ↗</a>
     </nav>
   </header>
@@ -302,6 +315,50 @@ make run</pre>
       </div>
     </section>
 
+    <section id="nix">
+      <h2>Linux and Windows: early, unproven</h2>
+      <p class="section-lede">
+        The same app also exists as a Rust port for Linux and Windows: one binary per system,
+        the same stations file, the same behaviour. It builds and it plays, but nobody has run it
+        on a real desktop yet, so treat it as a starting point rather than a download.
+      </p>
+      <div class="grid">
+        <div class="card">
+          <h3>Where it stands</h3>
+          <p>Both binaries build from source. Run headless on Linux, it decodes a live stream at real time, reads ICY track titles, and appears in media widgets through MPRIS. The Windows build compiles and links, and has never been started.</p>
+        </div>
+        <div class="card">
+          <h3>What is unproven</h3>
+          <p>The tray icon, its menu and every click in it. That needs a real desktop, and a desktop needs a tray host: waybar, GNOME with the AppIndicator extension, Plasma, XFCE, Cinnamon or MATE.</p>
+        </div>
+        <div class="card">
+          <h3>Media keys, both ways</h3>
+          <p>MPRIS on Linux and SMTC on Windows, so the desktop's own media widget shows the station and track and its buttons pause and resume the radio.</p>
+        </div>
+        <div class="card">
+          <h3>Two honest differences</h3>
+          <p>Stations are added by editing <code>stations.json</code> instead of a dialog, and the track line is a 60-character budget rather than a width measured to fit.</p>
+        </div>
+      </div>
+      <div class="notice">
+        <h3>It might not work on your desktop</h3>
+        <p>
+          It needs Rust, <code>ffmpeg</code>, and on Linux GTK 3 with libayatana-appindicator — plus
+          <code>xdotool</code> on Arch, because the tray library links <code>libxdo</code>. If the icon never
+          appears, the menu opens in the wrong place, or the Windows media flyout stays empty, that is a
+          known risk of an untested port, not a mystery.
+        </p>
+        <p>
+          It is also fixable without waiting for anyone: the port is a small, plain Rust codebase whose
+          README lists the parts that were never exercised. Open the repository with an AI coding agent,
+          run it, paste what you see, and ask it to fix that one thing.
+        </p>
+        <pre><span class="c"># Linux or Windows, from the repository root</span>
+cd Platforms
+cargo run -p radio --release</pre>
+      </div>
+    </section>
+
     <section class="license">
       <h2>Public domain</h2>
       <p>
@@ -313,7 +370,7 @@ make run</pre>
 
   <footer>
     <div class="foot">
-      <span>Made for macOS 14 and later.</span>
+      <span>Built for macOS 14 and later. Linux and Windows port in progress.</span>
       <span>
         <a href="https://github.com/Jostein/Radio">Source on GitHub</a> ·
         <a href="https://github.com/Jostein/Radio/blob/main/LICENSE">CC0-1.0</a>
