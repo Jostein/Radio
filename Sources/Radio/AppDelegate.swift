@@ -6,6 +6,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let menu = NSMenu()
 
     private var statusItem: NSStatusItem!
+    private weak var headerItem: NSMenuItem?
+    private weak var trackItem: NSMenuItem?
+    private var isMenuOpen = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         installMainMenu()
@@ -32,6 +35,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 .compactMap { $0 }
                 .joined(separator: " — ")
         } ?? "Radio"
+
+        refreshOpenMenuItems()
+    }
+
+    /// The menu is built when it opens. Keep its status rows current while it
+    /// stays open, without rebuilding it (that would disturb the slider drag).
+    private func refreshOpenMenuItems() {
+        guard isMenuOpen else { return }
+
+        headerItem?.title = nowPlayingTitle
+
+        guard let track = player.trackTitle, let trackItem else { return }
+        trackItem.attributedTitle = Self.trackTitle(track)
+        trackItem.toolTip = "Search YouTube for “\(track)”"
     }
 
     private var statusSymbol: String {
@@ -43,6 +60,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case .idle, .paused, .failed:
             return "dot.radiowaves.left.and.right"
         }
+    }
+
+    private static func trackTitle(_ track: String) -> NSAttributedString {
+        let text = track.count > 60 ? String(track.prefix(59)) + "…" : track
+        return NSAttributedString(
+            string: "♪  \(text)",
+            attributes: [
+                .font: NSFont.systemFont(ofSize: 11),
+                .foregroundColor: NSColor.secondaryLabelColor
+            ]
+        )
     }
 
     private static func symbol(_ name: String) -> NSImage? {
@@ -86,6 +114,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     // MARK: - Menu
 
+    func menuWillOpen(_ menu: NSMenu) {
+        isMenuOpen = true
+    }
+
+    func menuDidClose(_ menu: NSMenu) {
+        isMenuOpen = false
+    }
+
     func menuNeedsUpdate(_ menu: NSMenu) {
         rebuildMenu()
     }
@@ -121,7 +157,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let header = NSMenuItem(title: nowPlayingTitle, action: nil, keyEquivalent: "")
         header.isEnabled = false
         menu.addItem(header)
+        headerItem = header
 
+        trackItem = nil
         if let track = player.trackTitle {
             let item = NSMenuItem(
                 title: "",
@@ -129,15 +167,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 keyEquivalent: ""
             )
             item.target = self
-            item.attributedTitle = NSAttributedString(
-                string: "♪  \(track.count > 60 ? String(track.prefix(59)) + "…" : track)",
-                attributes: [
-                    .font: NSFont.systemFont(ofSize: 11),
-                    .foregroundColor: NSColor.secondaryLabelColor
-                ]
-            )
+            item.attributedTitle = Self.trackTitle(track)
             item.toolTip = "Search YouTube for “\(track)”"
             menu.addItem(item)
+            trackItem = item
         }
 
         let toggle = NSMenuItem(
