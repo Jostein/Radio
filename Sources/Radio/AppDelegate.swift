@@ -22,7 +22,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         player.onChange = { [weak self] in self?.refreshStatusItem() }
 
         refreshStatusItem()
-        rebuildMenu()
     }
 
     // MARK: - Status item
