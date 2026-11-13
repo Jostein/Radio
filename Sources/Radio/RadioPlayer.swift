@@ -150,7 +150,8 @@ final class RadioPlayer {
     func pause() {
         generation += 1
         cancelRecovery()
-        nowPlaying.stop()
+        // Keep the track that was playing on screen while paused.
+        nowPlaying.stop(clearingTitle: false)
         avPlayer.pause()
         state = current == nil ? .idle : .paused
         onChange?()

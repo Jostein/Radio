@@ -256,7 +256,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             target: self,
             action: #selector(volumeChanged(_:))
         )
-        slider.frame = NSRect(x: 38, y: 3, width: width - 52, height: 20)
+        slider.frame = NSRect(x: 38, y: 3, width: width - 46, height: 20)
         slider.controlSize = .small
         slider.isContinuous = true
 
