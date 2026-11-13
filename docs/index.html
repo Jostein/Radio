@@ -319,18 +319,19 @@ make run</pre>
       <h2>Linux and Windows: early</h2>
       <p class="section-lede">
         The same app also exists as a Rust port for Linux and Windows: one binary per system,
-        the same stations file, the same behaviour. It builds and it plays, and its tray and menu
-        have now been seen on one desktop; the sound card and Windows have not, so treat it as a
+        the same stations file, the same behaviour. It builds and it plays: the tray, the menu and the
+        audio have all been shown on Linux — a container with a waybar tray, a VM running PipeWire —
+        while a laptop's own sound card and the whole of Windows remain untried, so treat it as a
         starting point rather than a download.
       </p>
       <div class="grid">
         <div class="card">
           <h3>Where it stands</h3>
-          <p>Both binaries build from source, and the Windows one also passes its tests on a real Windows runner in CI. On Linux the tray icon renders in waybar, the menu opens with every item, and choosing a station plays it with the live track title in the header. Through MPRIS the same state reaches the desktop's media widget.</p>
+          <p>Both binaries build from source, and the Windows one also passes its tests on a real Windows runner in CI. On Linux the tray icon renders in waybar, the menu opens with every item, and choosing a station plays it with the live track title in the header. In a Debian VM with PipeWire it registers as a client and plays audibly — three seconds captured from the sink monitor measured −14.4 dB. Through MPRIS the same state reaches the desktop's media widget.</p>
         </div>
         <div class="card">
           <h3>What is unproven</h3>
-          <p>Sound through a real PipeWire or PulseAudio server, the icon inside GNOME's AppIndicator extension or Plasma's tray, edits to <code>stations.json</code> while it runs, reconnect after a dropped stream, sleep and wake. And on Windows: everything at runtime — the tray, the media flyout, the media keys.</p>
+          <p>Sound through a laptop's own audio hardware (PipeWire was proven on a VM's virtual card), the icon inside GNOME's AppIndicator extension or Plasma's tray, edits to <code>stations.json</code> while it runs, reconnect after a dropped stream, sleep and wake. And on Windows: everything at runtime — the tray, the media flyout, the media keys.</p>
         </div>
         <div class="card">
           <h3>Media keys, both ways</h3>
@@ -347,7 +348,7 @@ make run</pre>
           It needs Rust, <code>ffmpeg</code>, and on Linux GTK 3 with libayatana-appindicator — plus
           <code>xdotool</code> on Arch, because the tray library links <code>libxdo</code>. If the icon never
           appears, the menu opens in the wrong place, or the Windows media flyout stays empty, that is a
-          known risk of a port that has run on exactly one desktop, not a mystery.
+          known risk of a port that has run in a container and a VM, never on a real desktop.
         </p>
         <p>
           It is also fixable without waiting for anyone: the port is a small, plain Rust codebase whose
