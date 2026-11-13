@@ -12,6 +12,7 @@ final class NowPlayingMonitor: NSObject {
     private let icyReader = ICYTitleReader()
     private var icyTimer: Timer?
     private var icyURL: URL?
+    private var monitoredURL: URL?
     private var retryWorkItem: DispatchWorkItem?
     private var retriesLeft = 0
     private let icyRefreshInterval: TimeInterval = 30
@@ -43,6 +44,7 @@ final class NowPlayingMonitor: NSObject {
         stop()
 
         playerItem = item
+        monitoredURL = url
 
         // A station's own JSON feed is far cheaper than reading metadata out of
         // the audio, so prefer it and keep the stream as the fallback.
@@ -52,6 +54,36 @@ final class NowPlayingMonitor: NSObject {
         }
 
         startStreamUpdates(for: url)
+        discoverFeed(for: url)
+    }
+
+    /// Looks for a feed the station publishes itself. Stream metadata is already
+    /// running, so a slow or missing answer costs nothing and changes nothing.
+    private func discoverFeed(for url: URL) {
+        NowPlayingDiscovery.discover(for: url) { [weak self] source in
+            DispatchQueue.main.async {
+                guard let self, let source, self.monitoredURL == url else { return }
+                self.adopt(source, for: url)
+            }
+        }
+    }
+
+    /// Switches from the audio stream's metadata to a discovered feed.
+    private func adopt(_ source: NowPlayingAPI.Source, for url: URL) {
+        icyTimer?.invalidate()
+        icyTimer = nil
+        icyURL = nil
+        retriesLeft = 0
+        retryWorkItem?.cancel()
+        retryWorkItem = nil
+        icyReader.stop()
+
+        if let metadataItem {
+            metadataItem.remove(metadataOutput)
+        }
+        metadataItem = nil
+
+        startAPIUpdates(using: source, for: url)
     }
 
     /// HLS carries timed metadata; other streams carry it inline as ICY blocks.
@@ -72,6 +104,7 @@ final class NowPlayingMonitor: NSObject {
         icyTimer?.invalidate()
         icyTimer = nil
         icyURL = nil
+        monitoredURL = nil
         retriesLeft = 0
         retryWorkItem?.cancel()
         retryWorkItem = nil
