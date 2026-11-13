@@ -16,6 +16,7 @@ final class RadioPlayer {
 
     private(set) var current: Station?
     private(set) var state: State = .idle
+    private(set) var trackTitle: String?
 
     var onChange: (() -> Void)?
 
@@ -55,6 +56,11 @@ final class RadioPlayer {
     private var stalledTicks = 0
     private var healthyTicks = 0
 
+    private let titleReader = ICYTitleReader()
+    private var titleTimer: Timer?
+    private var titleURL: URL?
+    private let titleRefreshInterval: TimeInterval = 30
+
     /// Watchdog cadence, and how many consecutive unhealthy polls before the
     /// stream is rebuilt.
     private let tickInterval: TimeInterval = 5
@@ -88,6 +94,8 @@ final class RadioPlayer {
     }
 
     deinit {
+        titleTimer?.invalidate()
+        titleReader.stop()
         if let failureObserver {
             NotificationCenter.default.removeObserver(failureObserver)
         }
@@ -102,6 +110,7 @@ final class RadioPlayer {
         cancelRecovery()
         reconnectAttempt = 0
         current = station
+        trackTitle = nil
 
         guard let url = station.streamURL else {
             generation += 1
@@ -128,6 +137,7 @@ final class RadioPlayer {
     func pause() {
         generation += 1
         cancelRecovery()
+        stopTitleUpdates()
         avPlayer.pause()
         state = current == nil ? .idle : .paused
         onChange?()
@@ -136,9 +146,11 @@ final class RadioPlayer {
     func stop() {
         generation += 1
         cancelRecovery()
+        stopTitleUpdates()
         avPlayer.pause()
         detachItem()
         current = nil
+        trackTitle = nil
         reconnectAttempt = 0
         state = .idle
         onChange?()
@@ -194,6 +206,8 @@ final class RadioPlayer {
         avPlayer.replaceCurrentItem(with: item)
         avPlayer.volume = Float(volume)
         avPlayer.play()
+
+        startTitleUpdates(for: url)
     }
 
     private func observe(_ item: AVPlayerItem) {
@@ -227,6 +241,7 @@ final class RadioPlayer {
     private func handleFailure(_ message: String) {
         guard isActive, reconnectWorkItem == nil else { return }
         stopHealthTimer()
+        stopTitleUpdates()
 
         guard let url = current?.streamURL, reconnectAttempt < Self.maxReconnectAttempts else {
             state = .failed(message)
@@ -265,6 +280,44 @@ final class RadioPlayer {
         guard isActive, let url = current?.streamURL else { return }
         reconnectAttempt = 0
         begin(url, isRetry: false)
+    }
+
+    // MARK: - Now playing
+
+    private func startTitleUpdates(for url: URL) {
+        // HLS streams carry no ICY metadata, so there is nothing to poll for.
+        guard url.pathExtension.lowercased() != "m3u8" else {
+            stopTitleUpdates()
+            return
+        }
+
+        titleTimer?.invalidate()
+        titleURL = url
+        refreshTitle()
+
+        let timer = Timer(timeInterval: titleRefreshInterval, repeats: true) { [weak self] _ in
+            self?.refreshTitle()
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        titleTimer = timer
+    }
+
+    private func refreshTitle() {
+        guard let url = titleURL, isActive else { return }
+
+        titleReader.readTitle(from: url) { [weak self] title in
+            guard let self, self.isActive, self.titleURL == url, let title else { return }
+            guard title != self.trackTitle else { return }
+            self.trackTitle = title
+            self.onChange?()
+        }
+    }
+
+    private func stopTitleUpdates() {
+        titleTimer?.invalidate()
+        titleTimer = nil
+        titleURL = nil
+        titleReader.stop()
     }
 
     // MARK: - Health watchdog

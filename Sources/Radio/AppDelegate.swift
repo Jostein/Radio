@@ -27,8 +27,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func refreshStatusItem() {
         guard let button = statusItem?.button else { return }
         button.image = Self.symbol(statusSymbol)
-        button.toolTip = player.current.map {
-            "Radio — \($0.title) — \(statusDescription)"
+        button.toolTip = player.current.map { station in
+            ["Radio", station.title, statusDescription, player.trackTitle]
+                .compactMap { $0 }
+                .joined(separator: " — ")
         } ?? "Radio"
     }
 
@@ -119,6 +121,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let header = NSMenuItem(title: nowPlayingTitle, action: nil, keyEquivalent: "")
         header.isEnabled = false
         menu.addItem(header)
+
+        if let track = player.trackTitle {
+            let item = NSMenuItem()
+            item.attributedTitle = NSAttributedString(
+                string: "♪  \(track.count > 60 ? String(track.prefix(59)) + "…" : track)",
+                attributes: [
+                    .font: NSFont.systemFont(ofSize: 11),
+                    .foregroundColor: NSColor.secondaryLabelColor
+                ]
+            )
+            item.isEnabled = false
+            menu.addItem(item)
+        }
 
         let toggle = NSMenuItem(
             title: player.isActive ? "Pause" : "Play",

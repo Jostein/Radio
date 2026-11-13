@@ -22,6 +22,9 @@ browser tab.
 - **Sleep/wake aware.** Waking the Mac rejoins the live stream instead of
   trusting a connection that froze during sleep; waking while paused does
   nothing.
+- **Now playing.** When a station sends ICY metadata, the current track appears
+  under the station name in the menu (re-read every 30 seconds), while the
+  station name and connection state stay visible.
 - **Volume** slider in the menu, remembered between launches (defaults to 100%).
 
 ## Requirements
