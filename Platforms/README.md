@@ -152,12 +152,18 @@ sudo apt install build-essential libgtk-3-dev libayatana-appindicator3-dev \
 something else. On Hyprland the icon appears in whatever hosts a tray (waybar's
 `tray` module, for example); without a tray host there is nothing to click.
 
-**Windows**
+**Windows** (PowerShell)
 
-1. Install Rust from <https://rustup.rs> with the MSVC toolchain and Visual
-   Studio Build Tools.
-2. `winget install Gyan.FFmpeg` (any ffmpeg on `PATH` works).
-3. In `Platforms`: `cargo run -p radio --release`.
+```powershell
+winget install Rustlang.Rustup     # offers to install the MSVC build tools
+winget install Gyan.FFmpeg         # skip if you already have an ffmpeg on PATH
+cd Platforms
+cargo run -p radio --release
+```
+
+The MSVC build tools are the only long install, and rustup fetches them for you
+when it asks. Nothing else is needed: the tray library, the audio backend and
+the media keys are all Windows system libraries.
 
 CI does that build and the core tests on `windows-latest`
 (`.github/workflows/windows.yml`). It cannot test the tray: a runner has no
