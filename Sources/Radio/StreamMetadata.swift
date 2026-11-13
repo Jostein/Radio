@@ -146,7 +146,16 @@ private final class ICYProbe: NSObject, URLSessionDataDelegate {
         session.invalidateAndCancel()
 
         let name = title?.trimmingCharacters(in: .whitespacesAndNewlines)
-        completion?(name?.isEmpty == false ? name : nil, reachable)
-        completion = nil
+        let value = name?.isEmpty == false ? name : nil
+        let completion = self.completion
+        self.completion = nil
+
+        // This arrives on a URLSession queue; the caller fills in a text field.
+        let deliver: () -> Void = { completion?(value, reachable) }
+        if Thread.isMainThread {
+            deliver()
+        } else {
+            DispatchQueue.main.async(execute: deliver)
+        }
     }
 }

@@ -82,22 +82,37 @@ final class NowPlayingMonitor: NSObject {
         guard let url = icyURL else { return }
 
         icyReader.readTitle(from: url) { [weak self] result in
-            guard let self, self.icyURL == url else { return }
+            // The reader answers on its URLSession queue. Timers, retries and
+            // the menu updates that follow from this all belong on the main
+            // thread; AppKit aborts if it is touched from anywhere else.
+            Self.onMain { self?.handleICY(result, for: url) }
+        }
+    }
 
-            switch result {
-            case .title(let title):
-                self.retriesLeft = Self.maxICYRetries
-                self.setTitle(title)
-            case .empty:
-                // News, ads or a jingle: the station is publishing no song, so
-                // drop the last one instead of showing it indefinitely.
-                self.retriesLeft = Self.maxICYRetries
-                self.setTitle(nil)
-            case .unavailable:
-                // Busy or slow servers often answer on the next attempt; without
-                // this a station shows no track until the 30s refresh.
-                self.scheduleICYRetry(for: url)
-            }
+    private func handleICY(_ result: ICYTitleReader.Result, for url: URL) {
+        guard icyURL == url else { return }
+
+        switch result {
+        case .title(let title):
+            retriesLeft = Self.maxICYRetries
+            setTitle(title)
+        case .empty:
+            // News, ads or a jingle: the station is publishing no song, so drop
+            // the last one instead of showing it indefinitely.
+            retriesLeft = Self.maxICYRetries
+            setTitle(nil)
+        case .unavailable:
+            // Busy or slow servers often answer on the next attempt; without
+            // this a station shows no track until the 30s refresh.
+            scheduleICYRetry(for: url)
+        }
+    }
+
+    private static func onMain(_ work: @escaping () -> Void) {
+        if Thread.isMainThread {
+            work()
+        } else {
+            DispatchQueue.main.async(execute: work)
         }
     }
 
