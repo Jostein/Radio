@@ -1,165 +1,139 @@
 # Radio
 
-A tiny internet radio player that lives in the menu bar. Add stream URLs, give
-them titles, and tune in from the menu bar or system tray — no window, no Dock
-icon, no browser tab.
+A tiny internet radio player that lives in the menu bar. Add a stream URL, give
+it a title, and tune in — no window, no Dock icon, no browser tab.
 
-It runs on three desktops: **macOS, Linux and Windows**. macOS is the original,
-Swift and AppKit build; Linux and Windows share one Rust codebase with the same
-stations file and the same menu. All three are part of the app — [Platforms](#platforms)
-says what each one has been shown to do.
+macOS is the original, Swift and AppKit build. Linux and Windows run the same app
+from one Rust codebase, with the same stations file and the same menu. Light by
+design: 370 KB on disk, 16 MB of footprint when idle on this Mac — and about 3 MB
+of that is the app rather than macOS.
 
-## Features
+## What it does
 
-- **Menu bar or tray only.** The status item shows a waveform while playing and
-  circling arrows while reconnecting, on all three platforms.
-- **Stations with titles.** Add a station with a title + URL, remove it from a
-  submenu. The list is persisted between launches.
-- **HLS and direct streams.** `.m3u8` (HLS) goes straight to `AVPlayer`; plain
-  Icecast/MP3/AAC stream URLs play as-is.
-- **`.m3u` and `.pls` playlists.** Many stations hand out playlist files instead
-  of a stream address; these are fetched and resolved to the first stream entry,
-  including relative references and `File1=` entries.
-- **Reconnects on its own.** A dropped or stalled stream is rebuilt with
-  exponential backoff (1s, 2s, 4s, 8s, 16s, 30s — six attempts), with the menu
-  showing `Reconnecting (2 of 6)…`. A 5-second watchdog catches silent stalls,
-  not just reported errors.
-- **Sleep/wake aware.** Waking the Mac rejoins the live stream instead of
-  trusting a connection that froze during sleep; waking while paused does
-  nothing.
-- **Now playing.** The current track appears under the station name while the
-  station and connection state stay visible. Icecast/Shoutcast streams are read
-  from ICY metadata (polled every 30s, with quick retries when a server is busy);
-  HLS streams are read from timed metadata (ID3) when the stream carries it; and
-  stations that publish a JSON "now playing" document are read from that instead,
-  which is cheaper and fresher. Those are found automatically: Icecast servers
-  answer on `/status-json.xsl` and Shoutcast servers on `/stats?json=1`, and a
-  feed is used only when it names a title for the playing mount and is small
-  enough to poll more cheaply than the audio block. A few broadcasters that
-  block those endpoints (SomaFM, Radio Paradise, the FIP webradios) have their
-  own feeds built in. Anything else simply shows no track.
-  Clicking the track line opens a YouTube search for it in your default browser.
-  The station and track also appear in the system's own media controls — Now
-  Playing on macOS, MPRIS on Linux, SMTC on Windows — so Control Center, the
-  keyboard media keys and AirPods or headphone buttons pause and resume.
-- **Volume** slider in the menu, remembered between launches (defaults to 100%).
-- **Light.** A 370 KB binary and no bundled runtime of its own: 16 MB of footprint
-  on this Mac when idle. That is almost all framework — an empty AppKit status
-  item measures 13 MB — so the radio costs about 3 MB. While streaming, what
-  grows is AVFoundation's buffer, which a live stream does not need in full:
-  asking for six seconds instead of the default measured 16 MB → 13 MB for the
-  same station, and it starts sooner.
+- **Menu bar or tray only.** A waveform while playing, circling arrows while
+  reconnecting, nothing in the Dock.
+- **Stations with titles.** Added in a dialog that suggests the station's own
+  name, removed from a submenu, remembered between launches.
+- **Any stream.** `.m3u8` HLS, plain Icecast MP3 or AAC, and `.m3u` or `.pls`
+  playlist links, resolved to the stream inside.
+- **Keeps playing.** Dropped or stalled streams are rebuilt with backoff, and a
+  watchdog catches silence that never reports an error.
+- **Shows what is playing.** The track appears under the station name, read from
+  the stream or from the station's own feed; click it to search YouTube.
+- **Plays with your media keys.** Now Playing on macOS, MPRIS on Linux, SMTC on
+  Windows: the system's own controls pause and resume the radio.
+- **Remembers your volume**, at 100% out of the box.
 
-## Requirements
-
-- macOS 14 or later for the Swift build. Xcode **not** required — Command Line
-  Tools with Swift 6 / SwiftPM are enough.
-- Linux: Rust 1.75+, ffmpeg, GTK 3, libayatana-appindicator, and `xdotool` on
-  Arch for `libxdo`.
-- Windows: Rust 1.75+, ffmpeg, and the MSVC build tools; `winget` installs the
-  first two in two lines.
-
-## Platforms
-
-All three read the same `stations.json` format, seeded with FIP Reggae, and
-behave the same way: menu bar or tray only, ICY and feed titles, reconnect with
-backoff, media keys through the system's own controls.
-
-### macOS
-
-Swift and AppKit, macOS 14 or later — the build the app started as, and the one
-it is used on every day. Menu bar item, Now Playing and media keys, sleep/wake,
-playlists, volume.
+## Quick start
 
 ```sh
-make app    # builds build/Radio.app
-make run    # builds and launches it
-make clean  # removes .build and build
+# macOS 14+, Command Line Tools. The Xcode app is not needed.
+git clone https://github.com/Jostein/Radio.git
+cd Radio
+make run
 ```
 
-Then click the radio-waves icon in the menu bar. **Add Station…** takes a title
-and any of: a direct stream URL, an `.m3u8`, an `.m3u` or an `.pls` URL.
-
-The build pins SwiftPM's `--build-system native` flag, because the default build
-system fails on Command Line Tools–only installs (it reports a property-list
-parse error before compiling).
-
-### Linux
-
-One Rust binary per distro: tray icon, menu, an add-station dialog, playback,
-MPRIS.
-
 ```sh
-# Debian / Ubuntu
+# Linux: Rust 1.75+, ffmpeg, GTK 3, libayatana-appindicator
 sudo apt install build-essential libgtk-3-dev libayatana-appindicator3-dev \
   libasound2-dev libxdo-dev pkg-config ffmpeg
-
 cd Platforms
 cargo run -p radio --release
 ```
 
-Seen end to end on sway with waybar: the icon renders, the menu opens, a station
-plays with its live title, pause, volume and quit work, and MPRIS reports each
-change. In a Debian VM with PipeWire it registers as a client and plays audibly —
-three seconds recorded from the sink monitor measured −14.4 dB mean, −0.4 dB peak.
-
-While a station plays it sits at about 35 MB resident and under 1% of a core,
-with ffmpeg alongside it at another 0.7%. Paused, it measures 0.00% of a core and
-has already handed the sound device back.
-
-Not yet seen: a laptop's own sound card (the VM's is virtual), the icon inside
-GNOME's AppIndicator extension or Plasma's tray, edits to `stations.json` while
-it runs, reconnect after a dropped stream, sleep/wake.
-
-### Windows
-
-The same Rust source, so it is the same `cargo run`. Rust and ffmpeg come from
-winget; the MSVC build tools are the one long install, and rustup fetches them
-when it asks.
-
 ```powershell
-winget install Rustlang.Rustup
+# Windows, in PowerShell
+winget install Rustlang.Rustup    # offers the MSVC build tools
 winget install Gyan.FFmpeg
 cd Platforms
 cargo run -p radio --release
 ```
 
-It compiles, links and passes the core tests on a real Windows runner on every
-push (`.github/workflows/windows.yml`), and the hidden window SMTC binds to is
-created before the app starts. The tray, the media flyout and the media keys have
-**never been started** — a runner has no interactive session for a notification
-area to live in.
+The per-distro packages and the Arch-specific `xdotool` note are in
+[`Platforms/README.md`](Platforms/README.md).
 
-### What differs, on purpose
+## Platforms
 
-Adding a station is each platform's own dialog — an AppKit alert, a GTK dialog, a
-small Win32 window — with the same two fields, the same validation and the same
-title suggestion. Volume is a slider on macOS and stepped items in the tray
-builds, because a tray menu has nowhere to put a slider. And the track line is a
-60-character budget rather than a width measured to fit.
+| | Status |
+|---|---|
+| **macOS** | The original, in daily use. |
+| **Linux** | Run end to end in a container and a VM. A laptop's own sound card is still untried. |
+| **Windows** | Compiles, links and passes the core tests on a real Windows runner. Never started. |
 
-The port's own [`README`](Platforms/README.md) has the per-distro packages, the
-parity matrix and the list of expected failure points; if one of those builds
-misbehaves, that is a gap in evidence rather than a mystery.
+That last column is not modesty, it is the state of the evidence.
+[`Platforms/README.md`](Platforms/README.md) records exactly what has run where.
 
-## Keyboard
+## Details
 
-A status-bar app has no visible menu bar, but the app still installs a minimal
-hidden main menu so standard editing shortcuts work inside the add-station
-dialog: ⌘C, ⌘V, ⌘X, ⌘A, ⌘Z, plus ⌘Q to quit.
+Everything below is depth: how the streams are handled, the numbers, the files
+the app writes, and where its limits are.
 
-## Where data lives
+### Reconnect and the watchdog
+
+A dropped or stalled stream is rebuilt with exponential backoff — 1s, 2s, 4s,
+8s, 16s, 30s, six attempts — and the menu says `Reconnecting (2 of 6)…`. A
+five-second watchdog catches a stream that has gone silent without reporting an
+error, which is the failure that looks like "it just stopped".
+
+### How the track is found
+
+Icecast and Shoutcast streams are read from ICY metadata, polled every 30s with
+quick retries when a server is busy. HLS streams are read from timed metadata
+(ID3) when they carry it. Stations that publish a JSON "now playing" document are
+read from that instead, because it is cheaper and fresher: Icecast servers answer
+on `/status-json.xsl`, Shoutcast on `/stats?json=1`, and a feed is used only when
+it names a title for the playing mount and is small enough to poll more cheaply
+than the audio block. A few broadcasters that block those endpoints — SomaFM,
+Radio Paradise, the FIP webradios — have their own feeds built in. Anything else
+simply shows no track.
+
+### Playlists
+
+`.m3u` and `.pls` links are fetched and resolved to their first stream entry,
+including relative references and `File1=` entries. A playlist served from an
+extensionless URL is not resolved, because detection is by extension.
+
+### Sleep and wake
+
+On macOS, waking rejoins the live stream instead of trusting a connection that
+froze during sleep. Waking while paused does nothing. The Rust build has the same
+backoff and watchdog; wake has not been tried there.
+
+### Media keys
+
+The station and track go to the system's own media UI, so Control Center, the
+keyboard media keys and AirPods or headphone buttons work.
+
+### Performance
+
+Measured on this laptop and in a Debian VM:
+
+- **macOS:** a 370 KB binary, 16 MB footprint idle, of which 13 MB is an empty
+  AppKit status item — the app is about 3 MB over its framework. Streaming adds
+  AVFoundation's buffer, which a live stream does not need in full: asking for six
+  seconds instead of the default measured 16 MB → 13 MB for the same station, and
+  starts sooner.
+- **Linux:** 32.6 MB idle and 34.9 MB playing, 0.00% of a core when idle and
+  about 0.65% playing, with ffmpeg alongside at 0.75%. Pausing releases the sound
+  device rather than holding it.
+
+### Where data lives
 
 - Stations: `~/Library/Application Support/Radio/stations.json`
 - Volume: `UserDefaults` for `local.radio.menubar` (key `volume`)
 
 The Rust build uses the same file names in the platform's config directory:
 `~/.config/Radio/` on Linux, `%APPDATA%\Radio\` on Windows. Same JSON array, so
-the station list travels between machines.
+the station list travels between machines. Deleting the JSON file restores the
+single starter station (FIP Reggae).
 
-Deleting the JSON file restores the single starter station (FIP Reggae).
+### Keyboard
 
-## Project layout
+A status-bar app has no visible menu bar, but the app still installs a minimal
+hidden main menu so standard editing shortcuts work inside the add-station
+dialog: ⌘C, ⌘V, ⌘X, ⌘A, ⌘Z, plus ⌘Q to quit.
+
+### Project layout
 
 ```
 Package.swift                     SwiftPM manifest (macOS 14+, AppKit)
@@ -186,17 +160,17 @@ Platforms/                        Rust port for Linux and Windows
                                   (see Platforms/README.md)
 ```
 
-## Notes and limits
+### Notes and limits
 
-- Playlists are detected by file extension, so a playlist served from an
-  extensionless URL is not resolved.
 - Only the first entry of a playlist is used; there is no multi-entry selector.
 - One stream plays at a time.
 - The app is ad-hoc signed for local use. It is not notarized and not sandboxed,
   so it is not ready for distribution as-is.
-- Windows has never been started, and Linux has not yet met a laptop's own
-  sound card. Both are part of the app and both build from source;
-  [Platforms](#platforms) lists exactly which parts have run where.
+- On Linux and Windows, stations are shown with a 60-character budget rather than
+  a width measured to fit, and volume steps instead of a slider, because a tray
+  menu has nowhere to put one.
+- Windows has never been started, and Linux has not yet met a laptop's own sound
+  card.
 - `NSAllowsArbitraryLoadsForMedia` is enabled so plain-`http` radio streams work;
   the exception applies to media loads only.
 

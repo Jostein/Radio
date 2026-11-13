@@ -253,51 +253,43 @@
     </div>
 
     <section id="features">
-      <h2>Small app, fussy about the right things</h2>
-      <p class="section-lede">Everything it does is one menu click away, and it keeps playing when the stream misbehaves.</p>
+      <h2>What it does</h2>
+      <p class="section-lede">One menu click away, and it keeps playing when the stream misbehaves.</p>
       <div class="grid">
         <div class="card">
-          <h3>Menu bar or tray only</h3>
-          <p>One status item. A waveform while it plays, circling arrows while it reconnects, and nothing in your Dock — the same on every platform.</p>
+          <h3>Menu bar only</h3>
+          <p>A waveform while it plays, circling arrows while it reconnects, nothing in your Dock.</p>
         </div>
         <div class="card">
           <h3>Shows what is playing</h3>
-          <p>The current track appears under the station name, read from the stream itself or from a feed the station publishes. Feeds are found automatically, so a station you add is covered without configuring anything.</p>
+          <p>The track under the station name, read from the stream or the station's own feed. Click it to search YouTube.</p>
+        </div>
+        <div class="card">
+          <h3>Any stream</h3>
+          <p><code>.m3u8</code> HLS, plain Icecast MP3 or AAC, and <code>.m3u</code> or <code>.pls</code> links it resolves for you.</p>
+        </div>
+        <div class="card">
+          <h3>Keeps playing</h3>
+          <p>Dropped or stalled streams are rebuilt with backoff, and a watchdog catches silence that reports nothing.</p>
         </div>
         <div class="card">
           <h3>Plays with your media keys</h3>
-          <p>The station and track go to the system's own controls — Now Playing, MPRIS or SMTC — so Control Center, the keyboard keys and AirPods can pause and resume.</p>
+          <p>The system's own controls — Now Playing, MPRIS or SMTC — pause and resume the radio.</p>
         </div>
         <div class="card">
-          <h3>HLS and direct streams</h3>
-          <p>Plays <code>.m3u8</code> HLS streams and plain Icecast MP3 or AAC URLs, straight from the menu.</p>
-        </div>
-        <div class="card">
-          <h3>Playlist links welcome</h3>
-          <p>Paste an <code>.m3u</code> or <code>.pls</code> URL and it fetches the playlist, finds the stream inside and plays that.</p>
-        </div>
-        <div class="card">
-          <h3>Reconnects on its own</h3>
-          <p>Dropped or stalled streams are rebuilt with exponential backoff — 1s up to 30s — and a watchdog catches silence that never reports an error.</p>
-        </div>
-        <div class="card">
-          <h3>Handles sleep and wake</h3>
-          <p>On macOS, waking rejoins the live stream instead of trusting a connection that froze overnight. Paused stays paused. The Rust build has the same backoff and watchdog; wake has not been tried there.</p>
-        </div>
-        <div class="card">
-          <h3>Remembers your volume</h3>
-          <p>Set the slider once and it is still there next launch, at 100% out of the box.</p>
+          <h3>Light</h3>
+          <p>370 KB on disk and 16 MB of footprint when idle on macOS, about 3 MB of it the app rather than the framework.</p>
         </div>
       </div>
     </section>
 
     <section id="install">
       <h2>Build it</h2>
-      <p class="section-lede">Three small builds, no installer on any of them: a SwiftPM project on macOS, <code>cargo</code> on Linux and Windows. Each one ends the same way — an icon in the menu bar or the tray.</p>
+      <p class="section-lede">Three small builds, no installer on any of them.</p>
       <div class="grid">
         <div class="card">
           <h3>macOS</h3>
-          <p>SwiftPM, macOS 14 or later, Xcode Command Line Tools — the Xcode app is not needed.</p>
+          <p>macOS 14 or later, Command Line Tools. The Xcode app is not needed.</p>
           <pre><span class="c"># builds build/Radio.app and launches it</span>
 git clone https://github.com/Jostein/Radio.git
 cd Radio
@@ -305,7 +297,7 @@ make run</pre>
         </div>
         <div class="card">
           <h3>Linux</h3>
-          <p>Rust, ffmpeg, GTK 3 and libayatana-appindicator; <code>xdotool</code> on Arch, because the tray library links <code>libxdo</code>.</p>
+          <p>Rust, ffmpeg, GTK 3 and libayatana-appindicator; <code>xdotool</code> on Arch.</p>
           <pre><span class="c"># Debian / Ubuntu</span>
 sudo apt install build-essential libgtk-3-dev libayatana-appindicator3-dev \
   libasound2-dev libxdo-dev pkg-config ffmpeg
@@ -315,7 +307,7 @@ cargo run -p radio --release</pre>
         </div>
         <div class="card">
           <h3>Windows</h3>
-          <p>Rust and ffmpeg from winget, plus the MSVC build tools that rustup offers to install.</p>
+          <p>Rust and ffmpeg from winget, plus the MSVC tools rustup offers.</p>
           <pre><span class="c"># PowerShell</span>
 winget install Rustlang.Rustup
 winget install Gyan.FFmpeg
@@ -324,57 +316,37 @@ cargo run -p radio --release</pre>
         </div>
       </div>
       <p class="fineprint">
-        The macOS bundle is ad-hoc signed for local use: it runs on your Mac, but it is not notarized.
-        The Linux and Windows binaries are plain <code>cargo</code> builds, with no installer on either.
+        The macOS bundle is ad-hoc signed for local use, not notarized. The other two are plain
+        <code>cargo</code> builds.
       </p>
     </section>
 
     <section id="platforms">
       <h2>One radio, three desktops</h2>
       <p class="section-lede">
-        macOS is where it started. Linux and Windows run the same idea as one shared Rust build: the same
-        stations file, the same tray menu, the same reconnect, the same media keys. All three are the app —
-        the only difference is how much of each has been proven.
+        macOS is where it started; Linux and Windows are the same idea from one Rust codebase, with the same
+        stations file and the same menu.
       </p>
       <div class="grid">
         <div class="card">
           <h3>macOS</h3>
-          <p><strong>The original.</strong> Menu bar item, Now Playing and media keys, sleep and wake, playlists, volume. A 370 KB binary, 16 MB of footprint when idle. Built from this source and used every day.</p>
+          <p>The original, used every day. 370 KB on disk, 16 MB of footprint when idle.</p>
         </div>
         <div class="card">
           <h3>Linux</h3>
-          <p><strong>Rust build.</strong> Tray icon and menu, playback with live titles, pause, volume, quit and MPRIS all seen on sway with waybar. In a VM with PipeWire it plays audibly — three seconds from the sink monitor at −14.4 dB — from about 35 MB resident, under 1% of a core, and 0% when paused.</p>
+          <p>Same features from Rust: tray, menu, MPRIS, an add dialog. Run end to end in a container and a VM; a laptop's own sound card is still untried.</p>
         </div>
         <div class="card">
           <h3>Windows</h3>
-          <p><strong>Same Rust source.</strong> Compiles, links and passes the core tests on a real Windows runner, and the hidden window SMTC binds to is created. The tray and media flyout have never been started.</p>
-        </div>
-        <div class="card">
-          <h3>Same everywhere</h3>
-          <p>The stations file and its starter station, an add dialog that suggests the station's own name, ICY and feed titles, reconnect with backoff, volume that persists, one stream at a time.</p>
-        </div>
-        <div class="card">
-          <h3>Deliberately different</h3>
-          <p>The add dialog is GTK on Linux and a small Win32 window on Windows rather than an AppKit alert; volume steps instead of a slider, because tray menus have nowhere for one; and the track line is a 60-character budget rather than a measured width.</p>
-        </div>
-        <div class="card">
-          <h3>Media keys, all three</h3>
-          <p>Now Playing, MPRIS and SMTC — the desktop's own media widget shows the station and track, and its buttons pause and resume the radio.</p>
+          <p>Builds and passes its core tests on a real Windows runner. The tray has not been started yet.</p>
         </div>
       </div>
       <div class="notice">
-        <h3>Where the evidence stops</h3>
+        <h3>Early on Linux and Windows</h3>
         <p>
-          All three platforms are the app; what differs is how much of each has actually been run. macOS is
-          in daily use. Linux has been driven end to end in a container and a VM, on a virtual sound card.
-          Windows has been built and tested but never started. If the tray is missing on your desktop, the
-          menu opens in the wrong place, or the media flyout stays empty, that is the known limit of the
-          evidence — the kind of thing that gets fixed in one sitting, not a mystery.
-        </p>
-        <p>
-          It is also fixable without waiting for anyone: the port is a small, plain Rust codebase whose
-          README lists the parts that were never exercised. Open the repository with an AI coding agent,
-          run it, paste what you see, and ask it to fix that one thing.
+          The Mac app is the mature one. The other two work, but less has been proven on them —
+          <a href="https://github.com/Jostein/Radio/blob/main/Platforms/README.md">Platforms/README.md</a>
+          says exactly what has run where, and the fixes are small.
         </p>
       </div>
     </section>
@@ -390,7 +362,7 @@ cargo run -p radio --release</pre>
 
   <footer>
     <div class="foot">
-      <span>Built for macOS 14 and later. Linux and Windows port in progress.</span>
+      <span>Built for macOS 14 and later, with Linux and Windows builds.</span>
       <span>
         <a href="https://github.com/Jostein/Radio">Source on GitHub</a> ·
         <a href="https://github.com/Jostein/Radio/blob/main/LICENSE">CC0-1.0</a>
