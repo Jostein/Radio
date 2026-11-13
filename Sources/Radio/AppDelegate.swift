@@ -9,6 +9,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private weak var headerItem: NSMenuItem?
     private weak var trackItem: NSMenuItem?
     private var isMenuOpen = false
+    /// How much text the now-playing row may occupy once the menu is open.
+    private var trackRowTextWidth: CGFloat = .infinity
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         installMainMenu()
@@ -50,7 +52,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // makes AppKit try to show a tooltip panel mid-tracking, which throws
         // and aborts the app. The tooltip is refreshed when the menu is rebuilt.
         if let track = player.trackTitle {
-            trackItem.attributedTitle = Self.trackTitle(track)
+            trackItem.attributedTitle = TrackLabel.attributed(track, width: trackRowTextWidth)
         } else {
             // The station moved on to news or an ad: clear the row rather than
             // leaving the previous song sitting there.
@@ -72,17 +74,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case .idle, .paused, .failed:
             return "dot.radiowaves.left.and.right"
         }
-    }
-
-    private static func trackTitle(_ track: String) -> NSAttributedString {
-        let text = track.count > 60 ? String(track.prefix(59)) + "…" : track
-        return NSAttributedString(
-            string: "♪  \(text)",
-            attributes: [
-                .font: NSFont.systemFont(ofSize: 11),
-                .foregroundColor: NSColor.secondaryLabelColor
-            ]
-        )
     }
 
     private static func symbol(_ name: String) -> NSImage? {
@@ -179,7 +170,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 keyEquivalent: ""
             )
             item.target = self
-            item.attributedTitle = Self.trackTitle(track)
+            item.attributedTitle = TrackLabel.attributed(track)
             item.toolTip = "Search YouTube for “\(track)”"
             menu.addItem(item)
             trackItem = item
@@ -235,6 +226,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(quit)
 
         let width = max(Self.minimumSliderWidth, menu.size.width)
+        // Room for the row's own text inset, so a later title cannot widen the
+        // menu while it is open.
+        trackRowTextWidth = max(120, width - 64)
         menu.insertItem(volumeItem(width: width), at: sliderIndex)
     }
 
