@@ -1,5 +1,6 @@
 mod app;
 mod audio;
+mod dialog;
 mod icon;
 mod media;
 mod menu;

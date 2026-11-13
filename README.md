@@ -80,7 +80,8 @@ parse error before compiling).
 
 ### Linux
 
-One Rust binary per distro: tray icon, menu, playback, MPRIS.
+One Rust binary per distro: tray icon, menu, an add-station dialog, playback,
+MPRIS.
 
 ```sh
 # Debian / Ubuntu
@@ -121,8 +122,12 @@ area to live in.
 
 ### What differs, on purpose
 
-Linux and Windows add stations by editing `stations.json` instead of a dialog,
-and the track line is a 60-character budget rather than a width measured to fit.
+Adding a station is each platform's own dialog — an AppKit alert, a GTK dialog, a
+small Win32 window — with the same two fields, the same validation and the same
+title suggestion. Volume is a slider on macOS and stepped items in the tray
+builds, because a tray menu has nowhere to put a slider. And the track line is a
+60-character budget rather than a width measured to fit.
+
 The port's own [`README`](Platforms/README.md) has the per-distro packages, the
 parity matrix and the list of expected failure points; if one of those builds
 misbehaves, that is a gap in evidence rather than a mystery.

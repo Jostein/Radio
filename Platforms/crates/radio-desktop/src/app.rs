@@ -77,6 +77,12 @@ impl App {
                 menu::VOLUME_UP => self.change_volume(0.1),
                 menu::VOLUME_DOWN => self.change_volume(-0.1),
                 menu::YOUTUBE => self.open_track_search(),
+                menu::ADD_STATION => {
+                    if let Some(station) = crate::dialog::add_station() {
+                        self.store.add(station);
+                        self.rebuild();
+                    }
+                }
                 menu::OPEN_STATIONS => {
                     let _ = open::that(self.store.stations_file());
                 }

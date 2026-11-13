@@ -7,6 +7,7 @@ pub const TOGGLE: &str = "toggle";
 pub const VOLUME_UP: &str = "vol:+";
 pub const VOLUME_DOWN: &str = "vol:-";
 pub const YOUTUBE: &str = "youtube";
+pub const ADD_STATION: &str = "add-station";
 pub const OPEN_STATIONS: &str = "open-stations";
 pub const RELOAD_STATIONS: &str = "reload-stations";
 pub const QUIT: &str = "quit";
@@ -83,6 +84,10 @@ pub fn build(store: &Store, player: &Player) -> Built {
     let _ = menu.append(&PredefinedMenuItem::separator());
     let _ = menu.append(&stations_menu);
     let _ = menu.append(&remove_menu);
+    let _ = menu.append(&PredefinedMenuItem::separator());
+
+    let add_station = MenuItem::with_id(ADD_STATION, "Add Station…", true, None);
+    let _ = menu.append(&add_station);
     let _ = menu.append(&PredefinedMenuItem::separator());
 
     let open_stations = MenuItem::with_id(OPEN_STATIONS, "Open Stations File…", true, None);

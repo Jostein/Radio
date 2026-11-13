@@ -70,6 +70,11 @@ impl Store {
         }
     }
 
+    pub fn add(&mut self, station: Station) {
+        self.stations.push(station);
+        self.save();
+    }
+
     pub fn remove(&mut self, id: &str) -> bool {
         let before = self.stations.len();
         self.stations.retain(|station| station.id != id);

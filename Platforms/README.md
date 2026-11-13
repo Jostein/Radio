@@ -218,7 +218,7 @@ Three things to watch for, because they are the parts most likely to need a fix:
 | Feature | macOS | Port |
 |---|---|---|
 | Menu bar / tray only | yes | yes |
-| Stations by URL + title | dialog | JSON file, watched for edits |
+| Stations by URL + title | dialog | dialog (GTK on Linux, Win32 on Windows), same validation |
 | Volume | slider, persisted | Louder / Quieter items, persisted |
 | ICY, feeds, discovery | yes | yes (same rules, same caps) |
 | HLS | AVPlayer | ffmpeg |
@@ -226,9 +226,10 @@ Three things to watch for, because they are the parts most likely to need a fix:
 | Stall watchdog | 5 s × 4 | 1 s × 4 on a stalled sample counter |
 | Pause keeps track, resume rejoins live | yes | yes |
 | Sleep/wake recovery | yes | not yet |
+| Title suggested from the stream | yes | yes (same rules, same fallback) |
 | Click track to search YouTube | yes | yes |
 | Control Center / media keys | `MPNowPlayingInfoCenter` | MPRIS on Linux, SMTC on Windows |
-| Add station from the app | dialog | edit the JSON file |
+
 | Width-fitted title | measured | 60-character budget |
 
 ## Deliberate choices
@@ -320,14 +321,12 @@ the macOS build.
 
 1. Work through the checklist on Windows, where none of it has run: the tray,
    its menu, the media flyout and the media keys are the parts with no evidence
-   behind them. On Linux the icon, the menu, pause, volume, quit, MPRIS and
-   playback through PipeWire are done; editing `stations.json` while it runs (6)
+   behind them. On Linux the icon, the menu, pause, volume, quit, MPRIS, the add
+   dialog and playback through PipeWire are done; editing `stations.json` while it runs (6)
    and reconnect (5) are not, and no laptop's own sound card has been tried.
 2. Prove SMTC on a real Windows. It compiles and links, but the flyout, the
    hidden window and the media keys have never been exercised; the window style
    is the part I would expect to need adjusting.
-3. A proper add-station dialog (GTK dialog on Linux, a small Win32 one on
-   Windows); the file is a workable stopgap.
-4. Sleep/wake handling: a laptop resume should rejoin the stream, as the macOS
+3. Sleep/wake handling: a laptop resume should rejoin the stream, as the macOS
    build does.
-5. Native decoding for non-HLS streams, dropping ffmpeg for the common case.
+4. Native decoding for non-HLS streams, dropping ffmpeg for the common case.
