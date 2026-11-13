@@ -27,6 +27,7 @@ browser tab.
   from ICY metadata (polled every 30s, with quick retries when a server is busy);
   HLS streams are read from timed metadata (ID3) when the stream carries it.
   Streams with neither — Radio France's FIP, for example — simply show no track.
+  Clicking the track line opens a YouTube search for it in your default browser.
 - **Volume** slider in the menu, remembered between launches (defaults to 100%).
 
 ## Requirements
