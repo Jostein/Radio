@@ -1,0 +1,32 @@
+[package]
+name = "radio"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Menu bar internet radio for Linux and Windows"
+
+[[bin]]
+name = "radio"
+path = "src/main.rs"
+
+[dependencies]
+radio-core = { path = "../radio-core" }
+tray-icon = "0.19"
+cpal = "0.15"
+open = "5"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+gtk = "0.18"
+zbus = { version = "5", features = ["blocking"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_System_LibraryLoader", "Win32_Graphics_Gdi"] }
+windows = { version = "0.62", features = [
+    "Foundation",
+    "Foundation_Collections",
+    "Media",
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_System_WinRT",
+    "Win32_System_Com",
+] }

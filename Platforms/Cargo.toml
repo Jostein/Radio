@@ -1,0 +1,12 @@
+[workspace]
+resolver = "2"
+members = ["crates/radio-core", "crates/radio-desktop"]
+
+[profile.release]
+# The app ships as a binary, not a library: symbols only cost disk.
+strip = true
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "CC0-1.0"
