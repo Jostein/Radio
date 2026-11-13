@@ -14,7 +14,12 @@ use std::time::Duration;
 /// has to be installed (`pacman -S ffmpeg` on Arch, `winget install ffmpeg` on
 /// Windows); a native decoder is the obvious follow-up for plain streams.
 pub struct Audio {
-    _stream: cpal::Stream,
+    /// The stream only exists while something is playing. Holding the device
+    /// open costs a scheduling thread in the audio server for silence, and keeps
+    /// the speakers away from every other app.
+    stream: Mutex<Option<cpal::Stream>>,
+    device: cpal::Device,
+    config: cpal::StreamConfig,
     ring: Arc<Ring>,
     volume: Arc<AtomicU32>,
     stopped: Arc<AtomicBool>,
@@ -144,26 +149,10 @@ impl Audio {
         let volume = Arc::new(AtomicU32::new(volume.clamp(0.0, 1.0).to_bits()));
         let pushed = Arc::new(AtomicU64::new(0));
 
-        let callback_ring = ring.clone();
-        let callback_volume = volume.clone();
-        let stream = device
-            .build_output_stream(
-                &config,
-                move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
-                    let gain = f32::from_bits(callback_volume.load(Ordering::Relaxed));
-                    callback_ring.drain(data, gain);
-                },
-                |error| eprintln!("radio: audio output error: {error}"),
-                None,
-            )
-            .map_err(|error| format!("Audio output could not be opened: {error}"))?;
-
-        stream
-            .play()
-            .map_err(|error| format!("Audio output could not start: {error}"))?;
-
         Ok(Audio {
-            _stream: stream,
+            stream: Mutex::new(None),
+            device,
+            config,
             ring,
             volume,
             stopped: Arc::new(AtomicBool::new(false)),
@@ -171,6 +160,51 @@ impl Audio {
             sample_rate,
             channels,
         })
+    }
+
+    /// Opens the device and starts the callbacks, if they are not running.
+    pub fn active(&self) {
+        let mut guard = match self.stream.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        if guard.is_some() {
+            return;
+        }
+
+        let ring = self.ring.clone();
+        let volume = self.volume.clone();
+        let opened = self
+            .device
+            .build_output_stream(
+                &self.config,
+                move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
+                    let gain = f32::from_bits(volume.load(Ordering::Relaxed));
+                    ring.drain(data, gain);
+                },
+                |error| eprintln!("radio: audio output error: {error}"),
+                None,
+            )
+            .map_err(|error| error.to_string());
+
+        match opened {
+            Ok(stream) => match stream.play() {
+                Ok(()) => *guard = Some(stream),
+                Err(error) => eprintln!("radio: audio output could not start: {error}"),
+            },
+            Err(error) => eprintln!("radio: audio output could not be opened: {error}"),
+        }
+    }
+
+    /// Closes the device. Dropping the stream releases the ALSA/PipeWire client,
+    /// which is what makes an idle app cost nothing and leave the sound card to
+    /// whoever else wants it.
+    pub fn idle(&self) {
+        let mut guard = match self.stream.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        let _ = guard.take();
     }
 
     pub fn set_volume(&self, volume: f32) {

@@ -98,7 +98,8 @@ change. In a Debian VM with PipeWire it registers as a client and plays audibly 
 three seconds recorded from the sink monitor measured −14.4 dB mean, −0.4 dB peak.
 
 While a station plays it sits at about 35 MB resident and under 1% of a core,
-with ffmpeg alongside it at another 0.7%.
+with ffmpeg alongside it at another 0.7%. Paused, it measures 0.00% of a core and
+has already handed the sound device back.
 
 Not yet seen: a laptop's own sound card (the VM's is virtual), the icon inside
 GNOME's AppIndicator extension or Plasma's tray, edits to `stations.json` while

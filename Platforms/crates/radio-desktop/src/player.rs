@@ -128,6 +128,7 @@ impl Player {
         self.generation += 1;
         self.monitor.stop(false);
         self.stop_child();
+        self.audio.idle();
         self.state = if self.current.is_some() {
             State::Paused
         } else {
@@ -139,6 +140,7 @@ impl Player {
         self.generation += 1;
         self.monitor.stop(true);
         self.stop_child();
+        self.audio.idle();
         self.current = None;
         self.title = None;
         self.reconnect_attempt = 0;
@@ -194,6 +196,7 @@ impl Player {
 
         self.generation += 1;
         let generation = self.generation;
+        self.audio.active();
 
         self.monitor.stop(true);
         self.stop_child();
