@@ -1,0 +1,146 @@
+import Foundation
+
+/// Reads `StreamTitle` from an Icecast/Shoutcast stream's inline metadata.
+///
+/// Metadata sits *inside* the audio stream at every `icy-metaint` bytes, so
+/// reaching it means reading (and discarding) the audio before it. This reader
+/// takes exactly one block and hangs up; the caller re-reads periodically
+/// instead of keeping a second full copy of the stream open.
+final class ICYTitleReader: NSObject, URLSessionDataDelegate {
+    private var completion: ((String?) -> Void)?
+    private var session: URLSession?
+    private var task: URLSessionDataTask?
+
+    private var metaint = 0
+    private var remainingAudioBytes = 0
+    private var buffer: [UInt8] = []
+    private var finished = false
+
+    func readTitle(from url: URL, timeout: TimeInterval = 12, completion: @escaping (String?) -> Void) {
+        stop()
+
+        finished = false
+        metaint = 0
+        remainingAudioBytes = 0
+        buffer.removeAll(keepingCapacity: false)
+        self.completion = completion
+
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.timeoutIntervalForRequest = timeout
+        configuration.timeoutIntervalForResource = timeout
+
+        let session = URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
+        self.session = session
+
+        var request = URLRequest(url: url)
+        request.setValue("1", forHTTPHeaderField: "Icy-MetaData")
+        request.setValue("Radio/1.0 (macOS)", forHTTPHeaderField: "User-Agent")
+
+        let task = session.dataTask(with: request)
+        self.task = task
+        task.resume()
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + timeout) { [weak self] in
+            self?.finish(with: nil)
+        }
+    }
+
+    /// Abandons the current read without reporting a title.
+    func stop() {
+        finish(with: nil)
+    }
+
+    // MARK: - URLSession
+
+    func urlSession(
+        _ session: URLSession,
+        dataTask: URLSessionDataTask,
+        didReceive response: URLResponse,
+        completionHandler: @escaping (URLSession.ResponseDisposition) -> Void
+    ) {
+        guard
+            let http = response as? HTTPURLResponse,
+            let header = http.value(forHTTPHeaderField: "icy-metaint"),
+            let interval = Int(header),
+            interval > 0,
+            (200..<300).contains(http.statusCode)
+        else {
+            // Not an ICY stream (HLS, plain file, error): nothing to read.
+            completionHandler(.cancel)
+            finish(with: nil)
+            return
+        }
+
+        metaint = interval
+        remainingAudioBytes = interval
+        completionHandler(.allow)
+    }
+
+    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+        guard metaint > 0, !finished else { return }
+        buffer.append(contentsOf: data)
+
+        while !finished {
+            // Skip the audio that precedes the next metadata block.
+            if remainingAudioBytes > 0 {
+                let count = min(remainingAudioBytes, buffer.count)
+                guard count > 0 else { return }
+                buffer.removeFirst(count)
+                remainingAudioBytes -= count
+                continue
+            }
+
+            guard let lengthByte = buffer.first else { return }
+            let blockLength = Int(lengthByte) * 16
+
+            if blockLength == 0 {
+                // No metadata this interval.
+                buffer.removeFirst(1)
+                remainingAudioBytes = metaint
+                continue
+            }
+
+            guard buffer.count >= blockLength + 1 else { return }
+
+            let block = Array(buffer[1...blockLength])
+            buffer.removeFirst(blockLength + 1)
+            remainingAudioBytes = metaint
+
+            if let title = Self.streamTitle(in: block) {
+                finish(with: title)
+            }
+        }
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        finish(with: nil)
+    }
+
+    // MARK: - Parsing
+
+    private static func streamTitle(in block: [UInt8]) -> String? {
+        let text = String(decoding: block, as: UTF8.self)
+        guard
+            let start = text.range(of: "StreamTitle='"),
+            let end = text[start.upperBound...].firstIndex(of: "'")
+        else { return nil }
+
+        let title = text[start.upperBound..<end].trimmingCharacters(in: .whitespacesAndNewlines)
+        return title.isEmpty ? nil : title
+    }
+
+    private func finish(with title: String?) {
+        guard !finished else { return }
+        finished = true
+
+        task?.cancel()
+        task = nil
+        session?.invalidateAndCancel()
+        session = nil
+        buffer.removeAll(keepingCapacity: false)
+
+        let completion = self.completion
+        self.completion = nil
+        completion?(title)
+    }
+}
