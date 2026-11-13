@@ -184,7 +184,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         toggle.image = Self.symbol(player.isActive ? "pause.fill" : "play.fill")
         menu.addItem(toggle)
 
-        menu.addItem(volumeItem())
+        menu.addItem(volumeItem(width: sliderRowWidth()))
         menu.addItem(.separator())
 
         if store.stations.isEmpty {
@@ -233,9 +233,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return submenu
     }
 
-    private func volumeItem() -> NSMenuItem {
+    /// The slider row is the widest thing in the menu unless a title outgrows
+    /// it, which leaves the slider looking short. Measure the text rows and
+    /// give the slider enough room to span whatever the menu will be.
+    private func sliderRowWidth() -> CGFloat {
+        var widest = Self.plainWidth(nowPlayingTitle)
+        if let track = player.trackTitle {
+            widest = max(widest, Self.trackTitle(track).size().width)
+        }
+        for station in store.stations {
+            widest = max(widest, Self.plainWidth(station.title))
+        }
+
+        // Text inset of a menu row (leading column plus trailing margin) and a
+        // little slack; overestimating only makes the row roomier, never short.
+        return min(max(240, widest + 38), 460)
+    }
+
+    private static func plainWidth(_ title: String) -> CGFloat {
+        (title as NSString).size(withAttributes: [.font: NSFont.menuFont(ofSize: 0)]).width
+    }
+
+    private func volumeItem(width: CGFloat) -> NSMenuItem {
         let item = NSMenuItem()
-        let container = NSView(frame: NSRect(x: 0, y: 0, width: 230, height: 26))
+        let container = NSView(frame: NSRect(x: 0, y: 0, width: width, height: 26))
 
         let speaker = NSImageView(frame: NSRect(x: 14, y: 5, width: 16, height: 16))
         speaker.image = NSImage(systemSymbolName: "speaker.fill", accessibilityDescription: "Volume")
@@ -249,7 +270,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             target: self,
             action: #selector(volumeChanged(_:))
         )
-        slider.frame = NSRect(x: 38, y: 3, width: 180, height: 20)
+        slider.frame = NSRect(x: 38, y: 3, width: width - 52, height: 20)
         slider.controlSize = .small
         slider.isContinuous = true
 
