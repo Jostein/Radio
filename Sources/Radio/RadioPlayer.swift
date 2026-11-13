@@ -42,7 +42,9 @@ final class RadioPlayer {
 
     private static let volumeKey = "volume"
 
-    private let avPlayer = AVPlayer()
+    /// Created on first use: constructing a player loads AVFoundation, which a
+    /// menu bar app that never plays would otherwise pay for at launch.
+    private lazy var avPlayer = AVPlayer()
 
     /// Bumped whenever the target stream changes, so a slow playlist lookup
     /// can't start playback for a station the user already left.
@@ -61,18 +63,22 @@ final class RadioPlayer {
 
     private let nowPlaying = NowPlayingMonitor()
 
-    /// The resolved stream URL, once a playlist has been unwrapped.
-    private var streamURL: URL?
+    /// The resolved stream URL, once a playlist has been unwrapped. Distinct
+    /// from `Station.streamURL`, which is whatever the user saved.
+    private var resolvedURL: URL?
 
     /// Watchdog cadence, and how many consecutive unhealthy polls before the
     /// stream is rebuilt.
     private let tickInterval: TimeInterval = 5
     private let ticksBeforeReconnect = 4
 
+    /// Healthy polls needed before a fresh failure is treated as a new problem
+    /// rather than a continuation of the last one.
+    private let healthyTicksBeforeRecovery = 6
+
     init() {
         let stored = UserDefaults.standard.object(forKey: Self.volumeKey) as? Double
         volume = min(max(stored ?? 1, 0), 1)
-        avPlayer.volume = Float(volume)
 
         nowPlaying.onChange = { [weak self] _ in
             self?.onChange?()
@@ -121,6 +127,7 @@ final class RadioPlayer {
         guard let url = station.streamURL else {
             generation += 1
             detachItem()
+            resolvedURL = nil
             state = .failed("That stream URL isn’t valid.")
             onChange?()
             return
@@ -156,7 +163,7 @@ final class RadioPlayer {
         avPlayer.pause()
         detachItem()
         current = nil
-        streamURL = nil
+        resolvedURL = nil
         reconnectAttempt = 0
         state = .idle
         onChange?()
@@ -170,8 +177,8 @@ final class RadioPlayer {
         startHealthTimer()
 
         // Pausing tore the metadata reader down; bring it back for the same item.
-        if let streamURL, let item = avPlayer.currentItem {
-            nowPlaying.start(for: streamURL, item: item)
+        if let resolvedURL, let item = avPlayer.currentItem {
+            nowPlaying.start(for: resolvedURL, item: item)
         }
 
         onChange?()
@@ -219,7 +226,7 @@ final class RadioPlayer {
         avPlayer.volume = Float(volume)
         avPlayer.play()
 
-        streamURL = url
+        resolvedURL = url
         nowPlaying.start(for: url, item: item)
     }
 
@@ -321,7 +328,7 @@ final class RadioPlayer {
             healthyTicks += 1
             // Only forgive earlier failures after sustained healthy playback, so
             // a stream that drops right after connecting still backs off.
-            if healthyTicks >= 6 {
+            if healthyTicks >= healthyTicksBeforeRecovery {
                 reconnectAttempt = 0
             }
             return

@@ -14,15 +14,9 @@ enum StreamMetadata {
             return
         }
 
-        icyMetadata(for: url) { name, reachable in
+        ICYProbe().run(url: url) { name, reachable in
             completion(name ?? (reachable ? fallbackTitle(for: url) : nil))
         }
-    }
-
-    // MARK: - Icecast / Shoutcast
-
-    private static func icyMetadata(for url: URL, completion: @escaping (String?, Bool) -> Void) {
-        ICYProbe().run(url: url, completion: completion)
     }
 
     // MARK: - Playlists
