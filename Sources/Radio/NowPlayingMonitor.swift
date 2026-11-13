@@ -86,17 +86,17 @@ final class NowPlayingMonitor: NSObject {
             } else {
                 // Busy or slow servers often answer on the next attempt; without
                 // this a station shows no track until the 30s refresh.
-                self.scheduleICYRetry()
+                self.scheduleICYRetry(for: url)
             }
         }
     }
 
-    private func scheduleICYRetry() {
+    private func scheduleICYRetry(for url: URL) {
         guard retriesLeft > 0, retryWorkItem == nil else { return }
         retriesLeft -= 1
 
         let work = DispatchWorkItem { [weak self] in
-            guard let self else { return }
+            guard let self, self.icyURL == url else { return }
             self.retryWorkItem = nil
             self.pollICY()
         }
