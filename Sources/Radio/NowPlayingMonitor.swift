@@ -43,7 +43,9 @@ final class NowPlayingMonitor: NSObject {
         item.add(metadataOutput)
     }
 
-    func stop() {
+    /// `clearingTitle: false` keeps the last known track, so pausing leaves it
+    /// visible instead of blanking the menu row.
+    func stop(clearingTitle: Bool = true) {
         icyTimer?.invalidate()
         icyTimer = nil
         icyURL = nil
@@ -57,7 +59,9 @@ final class NowPlayingMonitor: NSObject {
         }
         metadataItem = nil
 
-        setTitle(nil)
+        if clearingTitle {
+            setTitle(nil)
+        }
     }
 
     // MARK: - ICY polling
