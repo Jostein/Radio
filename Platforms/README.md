@@ -41,13 +41,13 @@ and Windows. Same behaviour, one shared codebase.
 >
 > **Still not observed:** `stations.json` edits while the app runs, reconnect
 > after a dropped stream, sleep/wake, resuming at the live edge after a pause,
-> the icon inside GNOME's AppIndicator
-> extension or Plasma's tray (only waybar has hosted it), a real pointer click
-> on a real menu (activation went over D-Bus, not through a cursor), HiDPI,
-> multi-monitor, and audio through a real PipeWire or PulseAudio server — the
-> container's ALSA is a `null` device, so decoding and timing are exercised but
-> nothing is heard. And on Windows, the whole runtime: it builds, links and
-> passes its tests, but no tray, no flyout, no media key has ever run there.
+> the icon inside GNOME's AppIndicator extension or Plasma's tray (only waybar
+> has hosted it), a real pointer click on a real menu (activation went over
+> D-Bus, not through a cursor), HiDPI, multi-monitor, and audio through a real
+> PipeWire or PulseAudio server — the container's ALSA is a `null` device, so
+> decoding and timing are exercised but nothing is heard. And on Windows, the
+> whole runtime: it builds, links and passes its tests, but no tray, no flyout,
+> no media key has ever run there.
 >
 > Two things running it on Linux already fixed: the output is now configured at
 > the device's own default rate (asking for the maximum rate is rejected outright
