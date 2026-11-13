@@ -3,7 +3,8 @@
 A port of the macOS menu bar player to Linux (target: Omarchy / Arch + Hyprland)
 and Windows. Same behaviour, one shared codebase.
 
-> **Status: builds everywhere, plays on Linux.** Verified with Rust 1.100:
+> **Status: runs on Linux, builds and tests itself on Windows.** Verified with
+> Rust 1.100:
 >
 > - `cargo build` / `cargo build --release` — clean on macOS.
 > - `cargo test -p radio-core` — 17 unit tests pass on macOS and on Linux.
@@ -12,6 +13,8 @@ and Windows. Same behaviour, one shared codebase.
 > - Windows: `cargo build --release --target x86_64-pc-windows-gnu` links a
 >   5.5 MB `radio.exe` from macOS (needs `mingw-w64`), SMTC included. The Win32
 >   message pump and the hidden window type-check against the MSVC target too.
+>   CI builds it with MSVC and runs the core tests on every change to
+>   `Platforms` — 2.9 MB, 17/17 (`.github/workflows/windows.yml`).
 >   **Nothing has been run on Windows yet.**
 > - Linux, headless (Xvfb, a private session bus, ALSA `null` output): the binary
 >   starts, loads libayatana-appindicator, decodes a live MP3 stream to 44.1 kHz
@@ -27,9 +30,24 @@ and Windows. Same behaviour, one shared codebase.
 >   bound to is created before the app starts. Needs a real Windows to prove the
 >   flyout, the media keys and the metadata.
 >
-> **Not observed yet, on any platform:** the icon in a real panel, menu clicks,
-> pause, volume, and `stations.json` edits while running. That needs a desktop
-> with a tray host; the checklist below is the order worth testing them in.
+> **Linux tray and menu: observed.** In the same container, with sway on its
+> headless backend and waybar's `tray` module as the host, the 32×32 icon renders
+> in the panel and the menu opens with every item. Driving that menu the way a
+> click does — DBusMenu `Event`, which reaches the same handler — a station
+> starts playing, the header becomes `FIP Reggae — Live` (feed poller and ICY
+> titles), Play becomes Pause, pause returns to `Paused`, Quieter steps the
+> volume 1.00 → 0.90 while Louder at 100% stays clamped, and Quit Radio exits
+> with code 0. MPRIS reports the state changes.
+>
+> **Still not observed:** `stations.json` edits while the app runs, reconnect
+> after a dropped stream, sleep/wake, resuming at the live edge after a pause,
+> the icon inside GNOME's AppIndicator
+> extension or Plasma's tray (only waybar has hosted it), a real pointer click
+> on a real menu (activation went over D-Bus, not through a cursor), HiDPI,
+> multi-monitor, and audio through a real PipeWire or PulseAudio server — the
+> container's ALSA is a `null` device, so decoding and timing are exercised but
+> nothing is heard. And on Windows, the whole runtime: it builds, links and
+> passes its tests, but no tray, no flyout, no media key has ever run there.
 >
 > Two things running it on Linux already fixed: the output is now configured at
 > the device's own default rate (asking for the maximum rate is rejected outright
@@ -101,12 +119,19 @@ something else. On Hyprland the icon appears in whatever hosts a tray (waybar's
 2. `winget install Gyan.FFmpeg` (any ffmpeg on `PATH` works).
 3. In `Platforms`: `cargo run -p radio --release`.
 
+CI does that build and the core tests on `windows-latest`
+(`.github/workflows/windows.yml`). It cannot test the tray: a runner has no
+interactive session for a notification area to live in.
+
 The icon appears in the notification area. Windows hides new tray icons behind
 the overflow chevron until you drag it out.
 
 ## Behaviour checklist for the first run
 
-In the order worth testing, because each later item depends on the earlier ones:
+In the order worth testing, because each later item depends on the earlier ones.
+On Linux, 1–3 and 7 have been exercised on sway/waybar, and 4 only as far as
+pause — resume and rejoining the live edge have not. 5, 6 and everything on
+Windows are untested:
 
 1. The tray icon appears and the menu opens.
 2. A station plays (the default is FIP Reggae, which is an `.m3u8` and therefore
@@ -241,9 +266,10 @@ the macOS build.
 
 ## Known gaps, in the order I would fix them
 
-1. Work through the checklist above on a real desktop: the tray has only ever
-   been loaded headlessly, so the icon, its menu and its clicks are the one part
-   of the port with no evidence behind it yet.
+1. Work through the checklist on Windows, where none of it has run: the tray,
+   its menu, the media flyout and the media keys are the parts with no evidence
+   behind them. On Linux the icon, the menu, pause, volume, quit and MPRIS are
+   done; editing `stations.json` while it runs (6) and reconnect (5) are not.
 2. Prove SMTC on a real Windows. It compiles and links, but the flyout, the
    hidden window and the media keys have never been exercised; the window style
    is the part I would expect to need adjusting.
