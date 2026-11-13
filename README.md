@@ -25,8 +25,10 @@ browser tab.
 - **Now playing.** The current track appears under the station name while the
   station and connection state stay visible. Icecast/Shoutcast streams are read
   from ICY metadata (polled every 30s, with quick retries when a server is busy);
-  HLS streams are read from timed metadata (ID3) when the stream carries it.
-  Streams with neither — Radio France's FIP, for example — simply show no track.
+  HLS streams are read from timed metadata (ID3) when the stream carries it; and
+  stations with a known JSON "now playing" feed (SomaFM, Radio Paradise, the FIP
+  webradios) are read from that instead, which is cheaper and fresher. Anything
+  else simply shows no track.
   Clicking the track line opens a YouTube search for it in your default browser.
 - **Volume** slider in the menu, remembered between launches (defaults to 100%).
 

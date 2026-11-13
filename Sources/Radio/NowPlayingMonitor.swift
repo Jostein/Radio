@@ -20,6 +20,13 @@ final class NowPlayingMonitor: NSObject {
 
     private let metadataOutput = AVPlayerItemMetadataOutput(identifiers: nil)
     private weak var metadataItem: AVPlayerItem?
+    private weak var playerItem: AVPlayerItem?
+
+    private var apiTimer: Timer?
+    private var apiSource: NowPlayingAPI.Source?
+    private var apiStreamURL: URL?
+    private var apiFailures = 0
+    private static let apiMaxFailures = 3
 
     override init() {
         super.init()
@@ -28,19 +35,35 @@ final class NowPlayingMonitor: NSObject {
 
     deinit {
         icyTimer?.invalidate()
+        apiTimer?.invalidate()
         icyReader.stop()
     }
 
     func start(for url: URL, item: AVPlayerItem) {
         stop()
 
+        playerItem = item
+
+        // A station's own JSON feed is far cheaper than reading metadata out of
+        // the audio, so prefer it and keep the stream as the fallback.
+        if let source = NowPlayingAPI.source(for: url) {
+            startAPIUpdates(using: source, for: url)
+            return
+        }
+
+        startStreamUpdates(for: url)
+    }
+
+    /// HLS carries timed metadata; other streams carry it inline as ICY blocks.
+    private func startStreamUpdates(for url: URL) {
         guard url.pathExtension.lowercased() == "m3u8" else {
             startICYUpdates(for: url)
             return
         }
 
-        metadataItem = item
-        item.add(metadataOutput)
+        guard let playerItem else { return }
+        metadataItem = playerItem
+        playerItem.add(metadataOutput)
     }
 
     /// `clearingTitle: false` keeps the last known track, so pausing leaves it
@@ -52,6 +75,7 @@ final class NowPlayingMonitor: NSObject {
         retriesLeft = 0
         retryWorkItem?.cancel()
         retryWorkItem = nil
+        stopAPIPolling()
         icyReader.stop()
 
         if let metadataItem {
@@ -62,6 +86,64 @@ final class NowPlayingMonitor: NSObject {
         if clearingTitle {
             setTitle(nil)
         }
+    }
+
+    // MARK: - JSON feeds
+
+    private func startAPIUpdates(using source: NowPlayingAPI.Source, for url: URL) {
+        apiSource = source
+        apiStreamURL = url
+        apiFailures = 0
+        pollAPI()
+
+        let timer = Timer(timeInterval: source.refreshInterval, repeats: true) { [weak self] _ in
+            self?.pollAPI()
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        apiTimer = timer
+    }
+
+    private func pollAPI() {
+        guard let source = apiSource else { return }
+
+        var request = URLRequest(url: source.url)
+        request.timeoutInterval = 8
+        request.setValue("Radio/1.0 (macOS)", forHTTPHeaderField: "User-Agent")
+
+        URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
+            let title = data.flatMap(source.parse)
+            let status = (response as? HTTPURLResponse)?.statusCode
+
+            DispatchQueue.main.async {
+                guard let self, self.apiSource?.url == source.url else { return }
+
+                if let title, !title.isEmpty {
+                    self.apiFailures = 0
+                    self.setTitle(title)
+                } else {
+                    self.noteAPIFailure(status: status, error: error)
+                }
+            }
+        }.resume()
+    }
+
+    /// A feed that answers with an error, or keeps failing, is abandoned for
+    /// this stream and the audio stream's own metadata takes over.
+    private func noteAPIFailure(status: Int?, error: Error?) {
+        apiFailures += 1
+        let gone = (status ?? 200) >= 400
+        guard gone || apiFailures >= Self.apiMaxFailures, let url = apiStreamURL else { return }
+
+        stopAPIPolling()
+        startStreamUpdates(for: url)
+    }
+
+    private func stopAPIPolling() {
+        apiTimer?.invalidate()
+        apiTimer = nil
+        apiSource = nil
+        apiStreamURL = nil
+        apiFailures = 0
     }
 
     // MARK: - ICY polling
