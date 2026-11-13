@@ -26,6 +26,10 @@ of that is the app rather than macOS.
 
 ## Quick start
 
+macOS is the build that is tested. The Linux and Windows commands are real and
+work on this project's own test bench, but neither has met a normal desktop yet —
+[Platforms](#platforms) says exactly what has run.
+
 ```sh
 # macOS 14+, Command Line Tools. The Xcode app is not needed.
 git clone https://github.com/Jostein/Radio.git

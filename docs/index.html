@@ -285,7 +285,7 @@
 
     <section id="install">
       <h2>Build it</h2>
-      <p class="section-lede">Three small builds, no installer on any of them.</p>
+      <p class="section-lede">Three small builds, no installer on any of them. macOS is the tested one; the Linux and Windows builds are younger, and the notes below say exactly what has been run on them.</p>
       <div class="grid">
         <div class="card">
           <h3>macOS</h3>
@@ -317,7 +317,8 @@ cargo run -p radio --release</pre>
       </div>
       <p class="fineprint">
         The macOS bundle is ad-hoc signed for local use, not notarized. The other two are plain
-        <code>cargo</code> builds.
+        <code>cargo</code> builds — if one of them misbehaves on your desktop, that is the port being
+        young, not you, and the repository says which parts were never exercised.
       </p>
     </section>
 
