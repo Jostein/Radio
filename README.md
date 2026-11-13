@@ -81,10 +81,19 @@ Resources/AppIcon.icns            app icon (used by alerts and Finder)
 Sources/Radio/main.swift          NSApplication entry, .accessory policy
 Sources/Radio/AppDelegate.swift   status item, menu, volume slider, actions
 Sources/Radio/RadioPlayer.swift   AVPlayer wrapper: state machine, backoff, watchdog, wake
+Sources/Radio/NowPlayingMonitor.swift  polling engine for ICY and feeds, plus HLS metadata
+Sources/Radio/NowPlayingFeeds.swift    known broadcaster feeds and generic discovery
+Sources/Radio/ICYTitleReader.swift  one ICY metadata block per read
+Sources/Radio/TrackUpdate.swift   title / no title / unavailable result
+Sources/Radio/SystemNowPlaying.swift  Control Center and media keys
+Sources/Radio/TrackLabel.swift    width-fitted now-playing row
 Sources/Radio/PlaylistResolver.swift  .m3u/.pls fetching and parsing
+Sources/Radio/StreamMetadata.swift  suggested station name for a stream URL
+Sources/Radio/YouTubeSearch.swift  track search in the default browser
 Sources/Radio/StationStore.swift  JSON-backed station list
 Sources/Radio/Station.swift       station model + URL validation
 Sources/Radio/AddStationForm.swift  title/URL dialog with inline validation
+docs/index.html                   landing page
 ```
 
 ## Notes and limits
