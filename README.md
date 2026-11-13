@@ -22,9 +22,11 @@ browser tab.
 - **Sleep/wake aware.** Waking the Mac rejoins the live stream instead of
   trusting a connection that froze during sleep; waking while paused does
   nothing.
-- **Now playing.** When a station sends ICY metadata, the current track appears
-  under the station name in the menu (re-read every 30 seconds), while the
-  station name and connection state stay visible.
+- **Now playing.** The current track appears under the station name while the
+  station and connection state stay visible. Icecast/Shoutcast streams are read
+  from ICY metadata (polled every 30s, with quick retries when a server is busy);
+  HLS streams are read from timed metadata (ID3) when the stream carries it.
+  Streams with neither — Radio France's FIP, for example — simply show no track.
 - **Volume** slider in the menu, remembered between launches (defaults to 100%).
 
 ## Requirements
