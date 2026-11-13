@@ -55,6 +55,14 @@ and Windows. Same behaviour, one shared codebase.
 > buffer fill level (a device that drains eagerly shows an empty buffer while
 > playing perfectly).
 
+## If it does not work
+
+This port was written with an AI coding agent, and that is the shortest route to a
+fix: open the repository in one, run it, paste what the menu shows you, and ask
+for that one thing. The known gaps at the bottom name the parts most likely to be
+wrong, so pointing at an item from that list is enough to start. An issue works
+too — say which system, which panel or desktop, and what happened.
+
 ## What is shared and what is not
 
 ```
