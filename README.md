@@ -69,19 +69,22 @@ binary per system, the same `stations.json`, the same behaviour — tray only,
 ICY and feed titles, reconnect with backoff, media keys through MPRIS on Linux
 and SMTC on Windows.
 
-**It is early, and it has run on one desktop so far.** What that means:
+**It is early, and it has only run inside containers and a VM.** What that means:
 
 - Both binaries build from source on every platform, with no warnings. The
   Windows build also compiles and passes its unit tests on a real Windows runner
   on every push, through `.github/workflows/windows.yml`.
-- On Linux it has been run twice. Headless (Xvfb, a private session bus, ALSA
-  `null` output) it decodes a live stream to 44.1 kHz PCM at real time and
+- On Linux it has been run three times. Headless (Xvfb, a private session bus,
+  ALSA `null` output) it decodes a live stream to 44.1 kHz PCM at real time and
   publishes MPRIS controls that `playerctl` drives. On a real compositor (sway
   with a waybar tray host) the icon renders, the menu opens, choosing a station
-  plays it, the header shows the ICY title, and pause, volume and quit work.
-- Still unproven on Linux: sound through PipeWire or PulseAudio, the icon inside
-  GNOME's AppIndicator extension or Plasma's tray, editing `stations.json` while
-  it runs, reconnect after a dropped stream, and sleep/wake.
+  plays it, the header shows the ICY title, and pause, volume and quit work. In a
+  Debian VM with PipeWire it registers as a client and plays audibly: three
+  seconds recorded from the sink monitor measured −14.4 dB mean, −0.4 dB peak.
+- Still unproven on Linux: a laptop's own sound card (PipeWire was proven on a
+  VM's virtual one), the icon inside GNOME's AppIndicator extension or Plasma's
+  tray, editing `stations.json` while it runs, reconnect after a dropped stream,
+  and sleep/wake.
 - The Windows build compiles and links but **has never been started**. The media
   flyout, the media keys, and the hidden window SMTC is bound to are unproven.
 

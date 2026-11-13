@@ -26,6 +26,12 @@ and Windows. Same behaviour, one shared codebase.
 >   `xesam:title` with the station as `xesam:artist`, play / pause / play-pause /
 >   stop, the writable `Volume` property, and `PropertiesChanged` signals for
 >   every one of them.
+> - Linux audio, in a Debian 13 VM (OrbStack: systemd, PipeWire 1.4.2, a virtio
+>   sound card): the app registers as a PipeWire client (`PipeWire ALSA
+>   [radio-bin]`), a station started from the tray menu plays through it — three
+>   seconds recorded from the sink monitor measured `mean_volume: -14.4 dB`,
+>   `max_volume: -0.4 dB` — and pause returns MPRIS to `Paused`. The card is
+>   virtual; a laptop's own audio hardware is still unproven.
 > - Windows media controls: SMTC compiles and links, and the hidden window it is
 >   bound to is created before the app starts. Needs a real Windows to prove the
 >   flyout, the media keys and the metadata.
@@ -43,11 +49,10 @@ and Windows. Same behaviour, one shared codebase.
 > after a dropped stream, sleep/wake, resuming at the live edge after a pause,
 > the icon inside GNOME's AppIndicator extension or Plasma's tray (only waybar
 > has hosted it), a real pointer click on a real menu (activation went over
-> D-Bus, not through a cursor), HiDPI, multi-monitor, and audio through a real
-> PipeWire or PulseAudio server — the container's ALSA is a `null` device, so
-> decoding and timing are exercised but nothing is heard. And on Windows, the
-> whole runtime: it builds, links and passes its tests, but no tray, no flyout,
-> no media key has ever run there.
+> D-Bus, not through a cursor), HiDPI, multi-monitor, and sound through a
+> laptop's own audio hardware — PipeWire was proven on a VM's virtual card. And
+> on Windows, the whole runtime: it builds, links and passes its tests, but no
+> tray, no flyout, no media key has ever run there.
 >
 > Two things running it on Linux already fixed: the output is now configured at
 > the device's own default rate (asking for the maximum rate is rejected outright
@@ -58,8 +63,9 @@ and Windows. Same behaviour, one shared codebase.
 ## If it does not work
 
 If the icon never appears, the menu opens somewhere odd, or a station will not
-start, that is the port being young, not you. Most of it has run on exactly one
-desktop, so your machine is allowed to be the second one that disagrees.
+start, that is the port being young, not you. It has run in a container and one
+VM, never on a real desktop, so your machine is allowed to be the first one that
+disagrees.
 
 Start it from the repository root:
 
@@ -163,9 +169,9 @@ the overflow chevron until you drag it out.
 ## Behaviour checklist for the first run
 
 In the order worth testing, because each later item depends on the earlier ones.
-On Linux, 1–3 and 7 have been exercised on sway/waybar, and 4 only as far as
-pause — resume and rejoining the live edge have not. 5, 6 and everything on
-Windows are untested:
+On Linux, 1–3 and 7 have been exercised — sway/waybar for the tray, a PipeWire VM
+for playback and sound — and 4 only as far as pause: resume and rejoining the
+live edge have not. 5, 6 and everything on Windows are untested:
 
 1. The tray icon appears and the menu opens.
 2. A station plays (the default is FIP Reggae, which is an `.m3u8` and therefore
@@ -302,8 +308,9 @@ the macOS build.
 
 1. Work through the checklist on Windows, where none of it has run: the tray,
    its menu, the media flyout and the media keys are the parts with no evidence
-   behind them. On Linux the icon, the menu, pause, volume, quit and MPRIS are
-   done; editing `stations.json` while it runs (6) and reconnect (5) are not.
+   behind them. On Linux the icon, the menu, pause, volume, quit, MPRIS and
+   playback through PipeWire are done; editing `stations.json` while it runs (6)
+   and reconnect (5) are not, and no laptop's own sound card has been tried.
 2. Prove SMTC on a real Windows. It compiles and links, but the flyout, the
    hidden window and the media keys have never been exercised; the window style
    is the part I would expect to need adjusting.
