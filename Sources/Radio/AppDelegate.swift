@@ -123,7 +123,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(header)
 
         if let track = player.trackTitle {
-            let item = NSMenuItem()
+            let item = NSMenuItem(
+                title: "",
+                action: #selector(searchTrackOnYouTube),
+                keyEquivalent: ""
+            )
+            item.target = self
             item.attributedTitle = NSAttributedString(
                 string: "♪  \(track.count > 60 ? String(track.prefix(59)) + "…" : track)",
                 attributes: [
@@ -131,7 +136,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     .foregroundColor: NSColor.secondaryLabelColor
                 ]
             )
-            item.isEnabled = false
+            item.toolTip = "Search YouTube for “\(track)”"
             menu.addItem(item)
         }
 
@@ -224,6 +229,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func togglePlayback() {
         player.togglePlayback()
+    }
+
+    @objc private func searchTrackOnYouTube() {
+        guard let track = player.trackTitle, let url = YouTubeSearch.url(for: track) else { return }
+        NSWorkspace.shared.open(url)
     }
 
     @objc private func volumeChanged(_ sender: NSSlider) {
