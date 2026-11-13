@@ -3,31 +3,48 @@ import Foundation
 
 /// Supplies the current track title for a stream.
 ///
-/// Icecast/Shoutcast stations carry it as ICY metadata inside the audio, which
-/// has to be polled; HLS stations carry it as timed metadata on the player item.
+/// Two mechanisms cover every station: polling a source (an ICY metadata block
+/// inside the audio, or a station's JSON feed) and, for HLS, metadata the player
+/// itself pushes. Only one source is active at a time, and a feed always wins
+/// over reading the audio.
 final class NowPlayingMonitor: NSObject {
     private(set) var title: String?
     var onChange: ((String?) -> Void)?
 
+    /// One source being polled, with the policy for what to do when it fails.
+    private struct Polling {
+        let interval: TimeInterval
+        let retryDelay: TimeInterval
+        /// Attempts after a failed read before the next regular refresh.
+        let retries: Int
+        let fetch: (@escaping (TrackUpdate) -> Void) -> Void
+        let cancel: () -> Void
+        /// Called when the retries are spent; a feed falls back to the stream.
+        /// ICY has nothing behind it, so it simply waits for the next refresh.
+        let onGiveUp: (() -> Void)?
+    }
+
+    private static let icyRefreshInterval: TimeInterval = 30
+    private static let icyRetryDelay: TimeInterval = 6
+    private static let icyRetries = 3
+    private static let feedRetryDelay: TimeInterval = 5
+    private static let feedRetries = 2
+
     private let icyReader = ICYTitleReader()
-    private var icyTimer: Timer?
-    private var icyURL: URL?
-    private var monitoredURL: URL?
-    private var retryWorkItem: DispatchWorkItem?
-    private var retriesLeft = 0
-    private let icyRefreshInterval: TimeInterval = 30
-    private let icyRetryDelay: TimeInterval = 6
-    private static let maxICYRetries = 3
-
     private let metadataOutput = AVPlayerItemMetadataOutput(identifiers: nil)
-    private weak var metadataItem: AVPlayerItem?
-    private weak var playerItem: AVPlayerItem?
 
-    private var apiTimer: Timer?
-    private var apiSource: NowPlayingAPI.Source?
-    private var apiStreamURL: URL?
-    private var apiFailures = 0
-    private static let apiMaxFailures = 3
+    private var currentURL: URL?
+    /// Held rather than referenced weakly: several fallbacks need it again
+    /// later, and a stream that outlives its item would strand them.
+    private var streamItem: AVPlayerItem?
+    private var metadataAttached = false
+
+    private var polling: Polling?
+    private var pollTimer: Timer?
+    private var retryWork: DispatchWorkItem?
+    private var retriesLeft = 0
+    /// Results from a source that has since been replaced must be ignored.
+    private var pollGeneration = 0
 
     override init() {
         super.init()
@@ -35,195 +52,217 @@ final class NowPlayingMonitor: NSObject {
     }
 
     deinit {
-        icyTimer?.invalidate()
-        apiTimer?.invalidate()
+        pollTimer?.invalidate()
         icyReader.stop()
     }
 
     func start(for url: URL, item: AVPlayerItem) {
         stop()
 
-        playerItem = item
-        monitoredURL = url
+        currentURL = url
+        streamItem = item
 
         // A station's own JSON feed is far cheaper than reading metadata out of
         // the audio, so prefer it and keep the stream as the fallback.
-        if let source = NowPlayingAPI.source(for: url) {
-            startAPIUpdates(using: source, for: url)
+        if let feed = NowPlayingFeeds.curated(for: url) {
+            startFeed(feed)
             return
         }
 
-        startStreamUpdates(for: url)
+        startStreamMetadata(for: url)
         discoverFeed(for: url)
-    }
-
-    /// Looks for a feed the station publishes itself. Stream metadata is already
-    /// running, so a slow or missing answer costs nothing and changes nothing.
-    private func discoverFeed(for url: URL) {
-        NowPlayingDiscovery.discover(for: url) { [weak self] source in
-            DispatchQueue.main.async {
-                guard let self, let source, self.monitoredURL == url else { return }
-                self.adopt(source, for: url)
-            }
-        }
-    }
-
-    /// Switches from the audio stream's metadata to a discovered feed.
-    private func adopt(_ source: NowPlayingAPI.Source, for url: URL) {
-        icyTimer?.invalidate()
-        icyTimer = nil
-        icyURL = nil
-        retriesLeft = 0
-        retryWorkItem?.cancel()
-        retryWorkItem = nil
-        icyReader.stop()
-
-        if let metadataItem {
-            metadataItem.remove(metadataOutput)
-        }
-        metadataItem = nil
-
-        startAPIUpdates(using: source, for: url)
-    }
-
-    /// HLS carries timed metadata; other streams carry it inline as ICY blocks.
-    private func startStreamUpdates(for url: URL) {
-        guard url.pathExtension.lowercased() == "m3u8" else {
-            startICYUpdates(for: url)
-            return
-        }
-
-        guard let playerItem else { return }
-        metadataItem = playerItem
-        playerItem.add(metadataOutput)
     }
 
     /// `clearingTitle: false` keeps the last known track, so pausing leaves it
     /// visible instead of blanking the menu row.
     func stop(clearingTitle: Bool = true) {
-        icyTimer?.invalidate()
-        icyTimer = nil
-        icyURL = nil
-        monitoredURL = nil
-        retriesLeft = 0
-        retryWorkItem?.cancel()
-        retryWorkItem = nil
-        stopAPIPolling()
-        icyReader.stop()
-
-        if let metadataItem {
-            metadataItem.remove(metadataOutput)
-        }
-        metadataItem = nil
-
-        playerItem = nil
+        stopPolling()
+        detachMetadata()
+        streamItem = nil
+        currentURL = nil
 
         if clearingTitle {
             setTitle(nil)
         }
     }
 
-    // MARK: - JSON feeds
+    // MARK: - Stream metadata
 
-    private func startAPIUpdates(using source: NowPlayingAPI.Source, for url: URL) {
-        apiSource = source
-        apiStreamURL = url
-        apiFailures = 0
-        pollAPI()
-
-        let timer = Timer(timeInterval: source.refreshInterval, repeats: true) { [weak self] _ in
-            self?.pollAPI()
+    /// HLS carries timed metadata that the player pushes; other streams carry an
+    /// ICY block that has to be read out of the audio.
+    private func startStreamMetadata(for url: URL) {
+        guard url.pathExtension.lowercased() == "m3u8" else {
+            startICY(for: url)
+            return
         }
-        RunLoop.main.add(timer, forMode: .common)
-        apiTimer = timer
+
+        guard let streamItem else { return }
+        streamItem.add(metadataOutput)
+        metadataAttached = true
     }
 
-    private func pollAPI() {
-        guard let source = apiSource else { return }
+    private func detachMetadata() {
+        if metadataAttached {
+            streamItem?.remove(metadataOutput)
+        }
+        metadataAttached = false
+    }
 
-        var request = URLRequest(url: source.url)
+    private func startICY(for url: URL) {
+        startPolling(
+            interval: Self.icyRefreshInterval,
+            retryDelay: Self.icyRetryDelay,
+            retries: Self.icyRetries,
+            fetch: { [icyReader] completion in
+                icyReader.readTitle(from: url, completion: completion)
+            },
+            cancel: { [icyReader] in icyReader.stop() },
+            onGiveUp: nil
+        )
+    }
+
+    /// Looks for a feed the station publishes itself. Stream metadata is already
+    /// running, so a slow or missing answer costs nothing and changes nothing.
+    private func discoverFeed(for url: URL) {
+        NowPlayingFeeds.discover(for: url) { [weak self] feed in
+            DispatchQueue.main.async {
+                guard let self, let feed, self.currentURL == url else { return }
+                self.stopPolling()
+                self.detachMetadata()
+                self.startFeed(feed)
+            }
+        }
+    }
+
+    // MARK: - Feeds
+
+    private func startFeed(_ feed: Feed) {
+        startPolling(
+            interval: feed.refreshInterval,
+            retryDelay: Self.feedRetryDelay,
+            retries: Self.feedRetries,
+            fetch: { completion in Self.fetch(feed, completion: completion) },
+            cancel: {},
+            onGiveUp: { [weak self] in
+                guard let self, let url = self.currentURL else { return }
+                self.startStreamMetadata(for: url)
+            }
+        )
+    }
+
+    private static func fetch(_ feed: Feed, completion: @escaping (TrackUpdate) -> Void) {
+        var request = URLRequest(url: feed.url)
         request.timeoutInterval = 8
         request.cachePolicy = .reloadIgnoringLocalCacheData
         request.setValue("Radio/1.0 (macOS)", forHTTPHeaderField: "User-Agent")
 
-        URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
-            let title = data.flatMap(source.parse)
+        URLSession.shared.dataTask(with: request) { data, response, error in
             let status = (response as? HTTPURLResponse)?.statusCode
-
-            DispatchQueue.main.async {
-                guard let self, self.apiSource?.url == source.url else { return }
-
-                if let title, !title.isEmpty {
-                    self.apiFailures = 0
-                    self.setTitle(title)
-                } else {
-                    self.noteAPIFailure(status: status, error: error)
-                }
+            let update: TrackUpdate
+            if error == nil, (status ?? 200) < 400, let data,
+               let title = feed.parse(data), !title.isEmpty {
+                update = .title(title)
+            } else {
+                update = .unavailable
             }
+
+            DispatchQueue.main.async { completion(update) }
         }.resume()
     }
 
-    /// A feed that answers with an error, or keeps failing, is abandoned for
-    /// this stream and the audio stream's own metadata takes over.
-    private func noteAPIFailure(status: Int?, error: Error?) {
-        apiFailures += 1
-        let gone = (status ?? 200) >= 400
-        guard gone || apiFailures >= Self.apiMaxFailures, let url = apiStreamURL else { return }
+    // MARK: - Polling
 
-        stopAPIPolling()
-        startStreamUpdates(for: url)
-    }
+    private func startPolling(
+        interval: TimeInterval,
+        retryDelay: TimeInterval,
+        retries: Int,
+        fetch: @escaping (@escaping (TrackUpdate) -> Void) -> Void,
+        cancel: @escaping () -> Void,
+        onGiveUp: (() -> Void)?
+    ) {
+        stopPolling()
 
-    private func stopAPIPolling() {
-        apiTimer?.invalidate()
-        apiTimer = nil
-        apiSource = nil
-        apiStreamURL = nil
-        apiFailures = 0
-    }
+        pollGeneration += 1
+        polling = Polling(
+            interval: interval,
+            retryDelay: retryDelay,
+            retries: retries,
+            fetch: fetch,
+            cancel: cancel,
+            onGiveUp: onGiveUp
+        )
+        retriesLeft = retries
+        poll()
 
-    // MARK: - ICY polling
-
-    private func startICYUpdates(for url: URL) {
-        icyURL = url
-        retriesLeft = Self.maxICYRetries
-        pollICY()
-
-        let timer = Timer(timeInterval: icyRefreshInterval, repeats: true) { [weak self] _ in
-            self?.pollICY()
+        let timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
+            self?.poll()
         }
         RunLoop.main.add(timer, forMode: .common)
-        icyTimer = timer
+        pollTimer = timer
     }
 
-    private func pollICY() {
-        guard let url = icyURL else { return }
+    private func poll() {
+        guard let polling else { return }
+        let generation = pollGeneration
 
-        icyReader.readTitle(from: url) { [weak self] result in
-            // The reader answers on its URLSession queue. Timers, retries and
-            // the menu updates that follow from this all belong on the main
-            // thread; AppKit aborts if it is touched from anywhere else.
-            Self.onMain { self?.handleICY(result, for: url) }
+        polling.fetch { update in
+            // Sources answer on their own queue. Timers, retries and the menu
+            // updates that follow all belong on the main thread; AppKit aborts
+            // if it is touched from anywhere else.
+            Self.onMain { [self] in
+                guard pollGeneration == generation else { return }
+                handle(update)
+            }
         }
     }
 
-    private func handleICY(_ result: ICYTitleReader.Result, for url: URL) {
-        guard icyURL == url else { return }
-
-        switch result {
+    private func handle(_ update: TrackUpdate) {
+        switch update {
         case .title(let title):
-            retriesLeft = Self.maxICYRetries
+            retriesLeft = polling?.retries ?? 0
             setTitle(title)
-        case .empty:
+        case .noTitle:
             // News, ads or a jingle: the station is publishing no song, so drop
             // the last one instead of showing it indefinitely.
-            retriesLeft = Self.maxICYRetries
+            retriesLeft = polling?.retries ?? 0
             setTitle(nil)
         case .unavailable:
             // Busy or slow servers often answer on the next attempt; without
-            // this a station shows no track until the 30s refresh.
-            scheduleICYRetry(for: url)
+            // this a station shows no track until the next refresh.
+            retryOrGiveUp()
         }
+    }
+
+    private func retryOrGiveUp() {
+        guard let polling else { return }
+
+        if retriesLeft > 0 {
+            retriesLeft -= 1
+            guard retryWork == nil else { return }
+
+            let work = DispatchWorkItem { [weak self] in
+                guard let self else { return }
+                self.retryWork = nil
+                self.poll()
+            }
+            retryWork = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + polling.retryDelay, execute: work)
+            return
+        }
+
+        guard let giveUp = polling.onGiveUp else { return }
+        stopPolling()
+        giveUp()
+    }
+
+    private func stopPolling() {
+        pollTimer?.invalidate()
+        pollTimer = nil
+        retryWork?.cancel()
+        retryWork = nil
+        polling?.cancel()
+        polling = nil
+        retriesLeft = 0
     }
 
     private static func onMain(_ work: @escaping () -> Void) {
@@ -232,19 +271,6 @@ final class NowPlayingMonitor: NSObject {
         } else {
             DispatchQueue.main.async(execute: work)
         }
-    }
-
-    private func scheduleICYRetry(for url: URL) {
-        guard retriesLeft > 0, retryWorkItem == nil else { return }
-        retriesLeft -= 1
-
-        let work = DispatchWorkItem { [weak self] in
-            guard let self, self.icyURL == url else { return }
-            self.retryWorkItem = nil
-            self.pollICY()
-        }
-        retryWorkItem = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + icyRetryDelay, execute: work)
     }
 
     // MARK: - Publishing
