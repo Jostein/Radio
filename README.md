@@ -69,14 +69,19 @@ binary per system, the same `stations.json`, the same behaviour — tray only,
 ICY and feed titles, reconnect with backoff, media keys through MPRIS on Linux
 and SMTC on Windows.
 
-**It is early, and not yet tested on a real desktop.** What that means:
+**It is early, and it has run on one desktop so far.** What that means:
 
-- Both binaries build from source on every platform, with no warnings.
-- The Linux binary has been run, headless (Xvfb, a private session bus, ALSA
-  `null` output): it starts, decodes a live stream to 44.1 kHz PCM at real time,
-  shows ICY track titles, and publishes MPRIS controls that `playerctl` drives.
-- The **tray icon, its menu and every click in it have never been seen** — a
-  container has no tray host. That is the part most likely to need a fix.
+- Both binaries build from source on every platform, with no warnings. The
+  Windows build also compiles and passes its unit tests on a real Windows runner
+  on every push, through `.github/workflows/windows.yml`.
+- On Linux it has been run twice. Headless (Xvfb, a private session bus, ALSA
+  `null` output) it decodes a live stream to 44.1 kHz PCM at real time and
+  publishes MPRIS controls that `playerctl` drives. On a real compositor (sway
+  with a waybar tray host) the icon renders, the menu opens, choosing a station
+  plays it, the header shows the ICY title, and pause, volume and quit work.
+- Still unproven on Linux: sound through PipeWire or PulseAudio, the icon inside
+  GNOME's AppIndicator extension or Plasma's tray, editing `stations.json` while
+  it runs, reconnect after a dropped stream, and sleep/wake.
 - The Windows build compiles and links but **has never been started**. The media
   flyout, the media keys, and the hidden window SMTC is bound to are unproven.
 
