@@ -46,8 +46,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         headerItem?.title = nowPlayingTitle
 
         guard let track = player.trackTitle, let trackItem else { return }
+        // Text only. Assigning `toolTip` to a menu item while its menu is open
+        // makes AppKit try to show a tooltip panel mid-tracking, which throws
+        // and aborts the app. The tooltip is refreshed when the menu is rebuilt.
         trackItem.attributedTitle = Self.trackTitle(track)
-        trackItem.toolTip = "Search YouTube for “\(track)”"
     }
 
     private var statusSymbol: String {
