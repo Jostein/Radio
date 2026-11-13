@@ -49,13 +49,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // Text only. Assigning `toolTip` to a menu item while its menu is open
         // makes AppKit try to show a tooltip panel mid-tracking, which throws
         // and aborts the app. The tooltip is refreshed when the menu is rebuilt.
-        guard let track = player.trackTitle else {
+        if let track = player.trackTitle {
+            trackItem.attributedTitle = Self.trackTitle(track)
+        } else {
             // The station moved on to news or an ad: clear the row rather than
             // leaving the previous song sitting there.
             trackItem.attributedTitle = NSAttributedString(string: "")
-            return
         }
-        trackItem.attributedTitle = Self.trackTitle(track)
+
+        // An open row is only re-rendered when AppKit believes the item changed.
+        // A title edit alone can leave the previous song on screen (especially
+        // when the new text is shorter, so the menu does not resize).
+        menu.itemChanged(trackItem)
     }
 
     private var statusSymbol: String {
