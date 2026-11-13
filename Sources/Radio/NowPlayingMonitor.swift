@@ -83,6 +83,8 @@ final class NowPlayingMonitor: NSObject {
         }
         metadataItem = nil
 
+        playerItem = nil
+
         if clearingTitle {
             setTitle(nil)
         }
@@ -108,6 +110,7 @@ final class NowPlayingMonitor: NSObject {
 
         var request = URLRequest(url: source.url)
         request.timeoutInterval = 8
+        request.cachePolicy = .reloadIgnoringLocalCacheData
         request.setValue("Radio/1.0 (macOS)", forHTTPHeaderField: "User-Agent")
 
         URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
