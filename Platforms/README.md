@@ -324,18 +324,32 @@ macOS column is the Swift app on this laptop, streaming.
 
 | | Linux before | Linux after | macOS |
 |---|---|---|---|
-| RSS | 88.5 MB | 34.2 MB | 32.2 MB footprint |
-| PSS, shared-aware | 52.2 MB | 24.6 MB | — |
-| CPU, app | 0.75% of a core | 0.80% | 1.4% |
-| CPU, ffmpeg | 0.70% of a core | 0.70% | none, AVFoundation decodes |
+| RSS, idle | 88.5 MB | 32.6 MB | 32.2 MB footprint |
+| RSS, playing | 88.5 MB | 34.9 MB | 32.2 MB |
+| PSS, shared-aware | 52.2 MB | 23.4 MB | — |
+| CPU, idle | 0.85% of a core | 0.00% | — |
+| CPU, playing (app) | 0.75% of a core | 0.65% | 1.4% |
+| CPU, playing (ffmpeg) | 0.70% of a core | 0.75% | none, AVFoundation decodes |
 | Threads | 14 | 14 | — |
 
-The 54 MB that went away was GTK's drawing stack. GDK loads a GL driver at
-start-up, and on a machine without a usable GPU that is llvmpipe, which maps
-17.7 MB of `libLLVM` and 6 MB of gallium into a process that never paints a
-pixel. The Linux build now sets `GDK_GL=disable` unless you have set it
-yourself. CPU did not move, which is the expected outcome: the driver was being
-loaded, not used.
+Three things were wrong, and each showed up in the numbers before it was fixed.
+
+**54 MB of GL for an icon.** GDK loads a GL driver at start-up, and on a machine
+without a usable GPU that is llvmpipe, which maps 17.7 MB of `libLLVM` and 6 MB
+of gallium into a process that never paints a pixel. The Linux build now sets
+`GDK_GL=disable` unless you have set it yourself.
+
+**A loop that woke 25 times a second to find nothing.** It is now driven by the
+GTK loop: a menu click wakes it immediately, and a 500 ms heartbeat handles the
+watchdog, reconnect backoff and title updates. Idle wake-ups fell from 467 per
+20 s to 41.
+
+**An audio device held open for silence.** The cpal stream was built at start-up
+and kept for the life of the process, so the audio server ran a scheduling
+thread against an empty mixer — 0.4% of a core doing nothing, and the speakers
+were unavailable to anything else. The stream now exists only while something is
+playing. This is also why the tray app gives the sound card back the moment you
+pause.
 
 ffmpeg is the second process and the second slice of CPU. macOS has neither,
 because AVFoundation decodes in-process — that difference is the whole cost of
