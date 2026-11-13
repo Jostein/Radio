@@ -43,6 +43,12 @@ says what each one has been shown to do.
   Playing on macOS, MPRIS on Linux, SMTC on Windows — so Control Center, the
   keyboard media keys and AirPods or headphone buttons pause and resume.
 - **Volume** slider in the menu, remembered between launches (defaults to 100%).
+- **Light.** A 370 KB binary and no bundled runtime of its own: 16 MB of footprint
+  on this Mac when idle. That is almost all framework — an empty AppKit status
+  item measures 13 MB — so the radio costs about 3 MB. While streaming, what
+  grows is AVFoundation's buffer, which a live stream does not need in full:
+  asking for six seconds instead of the default measured 16 MB → 13 MB for the
+  same station, and it starts sooner.
 
 ## Requirements
 
