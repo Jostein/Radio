@@ -317,6 +317,30 @@ Same `stations.json` array as macOS — copy it over and the list comes with you
 When `stations.json` is missing, the app starts with FIP Reggae, exactly like
 the macOS build.
 
+## Performance
+
+Measured while a station plays: Debian 13 in a VM, PipeWire, Xvfb, no GPU. The
+macOS column is the Swift app on this laptop, streaming.
+
+| | Linux before | Linux after | macOS |
+|---|---|---|---|
+| RSS | 88.5 MB | 34.2 MB | 32.2 MB footprint |
+| PSS, shared-aware | 52.2 MB | 24.6 MB | — |
+| CPU, app | 0.75% of a core | 0.80% | 1.4% |
+| CPU, ffmpeg | 0.70% of a core | 0.70% | none, AVFoundation decodes |
+| Threads | 14 | 14 | — |
+
+The 54 MB that went away was GTK's drawing stack. GDK loads a GL driver at
+start-up, and on a machine without a usable GPU that is llvmpipe, which maps
+17.7 MB of `libLLVM` and 6 MB of gallium into a process that never paints a
+pixel. The Linux build now sets `GDK_GL=disable` unless you have set it
+yourself. CPU did not move, which is the expected outcome: the driver was being
+loaded, not used.
+
+ffmpeg is the second process and the second slice of CPU. macOS has neither,
+because AVFoundation decodes in-process — that difference is the whole cost of
+one decoder covering HLS, MP3, AAC and Ogg.
+
 ## Known gaps, in the order I would fix them
 
 1. Work through the checklist on Windows, where none of it has run: the tray,

@@ -11,6 +11,15 @@ use std::time::Duration;
 pub fn run() -> Result<(), String> {
     #[cfg(target_os = "linux")]
     {
+        // The tray needs GTK's widgets, not its drawing stack: nothing here is
+        // ever painted. Left alone, GDK loads a GL driver at startup, and on a
+        // machine without a usable GPU that means llvmpipe, which drags in
+        // libLLVM — about 25 MB of address space for a tray icon. Users who
+        // want GL anyway can set GDK_GL themselves.
+        if std::env::var_os("GDK_GL").is_none() {
+            std::env::set_var("GDK_GL", "disable");
+        }
+
         gtk::init().map_err(|error| format!("The GTK main loop could not start: {error}"))?;
     }
 
