@@ -61,6 +61,11 @@ final class RadioPlayer {
     private var stalledTicks = 0
     private var healthyTicks = 0
 
+    /// Clock position at the last health poll. `timeControlStatus` alone is not
+    /// enough: told not to wait for buffering, AVPlayer reports `.playing` while
+    /// the stream sits at 0.0 and never starts. Only an advancing clock counts.
+    private var lastPosition: Double = 0
+
     private let nowPlaying = NowPlayingMonitor()
 
     /// The resolved stream URL, once a playlist has been unwrapped. Distinct
@@ -172,6 +177,7 @@ final class RadioPlayer {
 
     private func resume() {
         avPlayer.play()
+        lastPosition = avPlayer.currentTime().seconds
         stalledTicks = 0
         healthyTicks = 0
         state = .playing
@@ -225,14 +231,19 @@ final class RadioPlayer {
         // A live stream never seeks, so the default forward buffer only costs
         // memory and start-up latency. Measured on this Mac, with the same
         // station: 16 MB footprint at the default buffer, 13 MB at six seconds.
+        //
+        // Leave `automaticallyWaitsToMinimizeStalling` alone. Turning it off was
+        // tried here and left the player reporting `.playing` at 0.0 seconds for
+        // good, silent until the user paused and played again; the clock never
+        // moved. Waiting for the buffer is what makes the first second audible.
         item.preferredForwardBufferDuration = 6
-        avPlayer.automaticallyWaitsToMinimizeStalling = false
         observe(item)
         avPlayer.replaceCurrentItem(with: item)
         avPlayer.volume = Float(volume)
         avPlayer.play()
 
         resolvedURL = url
+        lastPosition = 0
         nowPlaying.start(for: url, item: item)
     }
 
@@ -329,7 +340,11 @@ final class RadioPlayer {
     private func checkHealth() {
         guard isActive else { return }
 
-        if avPlayer.timeControlStatus == .playing {
+        let position = avPlayer.currentTime().seconds
+        let advanced = position.isFinite && position > lastPosition + 0.5
+        if position.isFinite { lastPosition = position }
+
+        if avPlayer.timeControlStatus == .playing && advanced {
             stalledTicks = 0
             healthyTicks += 1
             // Only forgive earlier failures after sustained healthy playback, so

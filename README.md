@@ -114,9 +114,10 @@ Measured on this laptop and in a Debian VM:
 
 - **macOS:** a 370 KB binary, 16 MB footprint idle, of which 13 MB is an empty
   AppKit status item — the app is about 3 MB over its framework. Streaming adds
-  AVFoundation's buffer, which a live stream does not need in full: asking for six
-  seconds instead of the default measured 16 MB → 13 MB for the same station, and
-  starts sooner.
+  AVFoundation's buffer: 15 MB footprint with a six-second live buffer instead
+  of the default. Getting the last 2 MB by also telling AVPlayer not to wait for
+  that buffer was tried and reverted: the app then reported playing while the
+  stream sat silently at zero until the user paused and played again.
 - **Linux:** 32.6 MB idle and 34.9 MB playing, 0.00% of a core when idle and
   about 0.65% playing, with ffmpeg alongside at 0.75%. Pausing releases the sound
   device rather than holding it.
