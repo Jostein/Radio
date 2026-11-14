@@ -320,10 +320,13 @@ the macOS build.
 ## Performance
 
 Measured while a station plays: Debian 13 in a VM, PipeWire, Xvfb, no GPU. The
-macOS column is the Swift app on this laptop: 16 MB idle, 32 MB streaming before
-its live buffer was tuned (a bare AVPlayer of the same HLS stream then measured
-16 MB with the default buffer and 13 MB at six seconds). An empty AppKit status
-item on the same machine measures 13 MB, so the Swift app itself is about 3 MB.
+macOS column is the Swift app on this laptop: 16 MB footprint idle and 32 MB RSS
+while streaming. A six-second live buffer brings the streaming footprint to
+15 MB. A bare AVPlayer of the same HLS stream measured 16 MB at the default
+buffer and 13 MB at six seconds with buffering waits disabled — but that setting
+left the player reporting playing while silent, so it is not used. An empty
+AppKit status item on the same machine measures 13 MB, so the Swift app itself
+is about 3 MB.
 
 | | Linux before | Linux after | macOS |
 |---|---|---|---|
