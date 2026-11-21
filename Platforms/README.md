@@ -321,9 +321,9 @@ the macOS build.
 ## Performance
 
 Measured while a station plays: Debian 13 in a VM, PipeWire, Xvfb, no GPU. The
-macOS column is the Swift app on this laptop: 16 MB footprint idle and 32 MB RSS
-while streaming. A six-second buffer on HLS streams brings the streaming
-footprint to 15 MB; progressive Icecast streams keep AVFoundation's default,
+macOS column is the Swift app on this laptop: 15 MB footprint idle, 22 MB while
+streaming, and 32 MB RSS while playing. A six-second buffer on HLS streams keeps
+the playing footprint at 22 MB; progressive Icecast streams keep AVFoundation's default,
 because a short forward buffer made an AAC stream end every few seconds. A
 bare AVPlayer of the same HLS stream measured 16 MB at the default
 buffer and 13 MB at six seconds with buffering waits disabled — but that setting

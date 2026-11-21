@@ -83,6 +83,7 @@ final class StationFinder: NSObject, NSSearchFieldDelegate, NSTableViewDataSourc
         statusLabel.textColor = .secondaryLabelColor
         statusLabel.font = .systemFont(ofSize: 11)
         statusLabel.lineBreakMode = .byTruncatingTail
+        statusLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         statusLabel.translatesAutoresizingMaskIntoConstraints = false
 
         playButton.target = self
@@ -112,7 +113,7 @@ final class StationFinder: NSObject, NSSearchFieldDelegate, NSTableViewDataSourc
             scroll.bottomAnchor.constraint(equalTo: statusLabel.topAnchor, constant: -8),
 
             statusLabel.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16),
-            statusLabel.trailingAnchor.constraint(equalTo: cancel.leadingAnchor, constant: -8),
+            statusLabel.trailingAnchor.constraint(lessThanOrEqualTo: playButton.leadingAnchor, constant: -8),
             statusLabel.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -14),
 
             cancel.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16),

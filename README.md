@@ -5,7 +5,7 @@ it a title, and tune in — no window, no Dock icon, no browser tab.
 
 macOS is the original, Swift and AppKit build. Linux and Windows run the same app
 from one Rust codebase, with the same stations file and the same menu. Light by
-design: 480 KB on disk, 16 MB of footprint when idle on this Mac — and about 3 MB
+design: 480 KB on disk, 15 MB of footprint when idle on this Mac — and about 2 MB
 of that is the app rather than macOS.
 
 ## What it does
@@ -120,12 +120,13 @@ keyboard media keys and AirPods or headphone buttons work.
 
 Measured on this laptop and in a Debian VM:
 
-- **macOS:** a 480 KB binary, 16 MB footprint idle, of which 13 MB is an empty
-  AppKit status item — the app is about 3 MB over its framework. Streaming adds
-  AVFoundation's buffer: 15 MB footprint, with a six-second buffer on HLS streams
-  instead of the default. Progressive Icecast streams keep the default: with a
-  short forward buffer the player stops reading once it is full, the server closes
-  the idle connection, and the stream restarts every few seconds. Getting 2 MB more by also telling AVPlayer not to wait for that
+- **macOS:** a 480 KB binary, 15 MB footprint idle, of which 13 MB is an empty
+  AppKit status item — the app is about 2 MB over its framework. Playing adds
+  AVFoundation's buffer: 22 MB footprint on an HLS stream with a six-second
+  buffer, about 0.2% of a core. Progressive Icecast streams keep the default
+  buffer: with a short forward buffer the player stops reading once it is full,
+  the server closes the idle connection, and the stream restarts every few
+  seconds. Getting 2 MB more by also telling AVPlayer not to wait for that
   buffer was tried and reverted — the app then reported playing while the stream
   sat silently at zero until the user paused and played again.
 - **Linux:** 32.6 MB idle and 34.9 MB playing, 0.00% of a core when idle and
