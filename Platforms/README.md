@@ -189,7 +189,7 @@ live edge have not. 5, 6 and everything on Windows are untested:
 2. A station plays (the default is FIP Reggae, which is an `.m3u8` and therefore
    exercises the ffmpeg path).
 3. The track row fills in. FIP uses a built-in feed, so this proves the feed
-   poller. An the station mount proves ICY; a random Icecast station proves discovery.
+   poller. A plain Icecast mount proves ICY; a random station proves discovery.
 4. Pause keeps the last track; Play resumes at the live edge.
 5. Killing the network (or the station) shows `Reconnecting (n of 6)…` and
    recovers.
@@ -323,7 +323,8 @@ Measured while a station plays: Debian 13 in a VM, PipeWire, Xvfb, no GPU. The
 macOS column is the Swift app on this laptop: 16 MB footprint idle and 32 MB RSS
 while streaming. A six-second buffer on HLS streams brings the streaming
 footprint to 15 MB; progressive Icecast streams keep AVFoundation's default,
-because a short forward buffer made an AAC stream end every few seconds. A bare AVPlayer of the same HLS stream measured 16 MB at the default
+because a short forward buffer made an AAC stream end every few seconds. A
+bare AVPlayer of the same HLS stream measured 16 MB at the default
 buffer and 13 MB at six seconds with buffering waits disabled — but that setting
 left the player reporting playing while silent, so it is not used. An empty
 AppKit status item on the same machine measures 13 MB, so the Swift app itself

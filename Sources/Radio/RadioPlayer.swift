@@ -123,9 +123,9 @@ final class RadioPlayer {
         }
 
         // A live stream whose server closes the connection reaches the end of
-        // the item and pauses itself, without ever reporting a failure. the station's
-        // AAC stream does this; left alone the app sits silent and still looks
-        // like it is playing.
+        // the item and pauses itself, without ever reporting a failure. A
+        // progressive AAC stream does this; left alone the app sits silent and
+        // still looks like it is playing.
         endObserver = NotificationCenter.default.addObserver(
             forName: .AVPlayerItemDidPlayToEndTime,
             object: nil,
@@ -259,8 +259,8 @@ final class RadioPlayer {
         //
         // Only HLS gets that cut. On a progressive Icecast stream a short forward
         // buffer makes the player stop reading once it is full, and servers close
-        // the idle connection: an AAC stream then ended every few seconds, over and
-        // over, until the buffer was left at its default. Off, the same stream ran
+        // the idle connection: a progressive AAC stream then ended every few
+        // seconds, over and over, until the buffer was left at its default. Off, the same stream ran
         // 70 seconds with no reconnect in one run and one early end in another;
         // on, it managed four to eight early ends every run.
         //
