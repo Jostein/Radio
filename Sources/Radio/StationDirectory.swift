@@ -57,6 +57,13 @@ struct DirectoryStation: Decodable, Identifiable {
 enum StationDirectory {
     private static let endpoint = URL(string: "https://de1.api.radio-browser.info/json/stations/search")!
 
+    /// Read from the bundle so a version bump cannot leave the request stale.
+    private static var userAgent: String {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+            ?? "1.2"
+        return "Radio/\(version) (macOS)"
+    }
+
     static func search(_ query: String, limit: Int = 30) async throws -> [DirectoryStation] {
         let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return [] }
@@ -72,7 +79,7 @@ enum StationDirectory {
         guard let url = components?.url else { throw DirectoryError.badResponse }
 
         var request = URLRequest(url: url)
-        request.setValue("Radio/1.1 (macOS)", forHTTPHeaderField: "User-Agent")
+        request.setValue(Self.userAgent, forHTTPHeaderField: "User-Agent")
 
         // A session per search: this one request, then nothing left holding
         // connections or a cache after the panel closes.
