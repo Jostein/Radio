@@ -1,0 +1,37 @@
+# Interactive Windows testing for the tray app.
+#
+# GitHub Actions already proves the Windows build and the shared core tests, but
+# its runner has no interactive desktop, so the tray, its menu and the media
+# flyout are never exercised there. AppVeyor's free open-source plan runs a full
+# Windows VM and can pause a build for Remote Desktop, which is the point of this
+# file: build radio.exe, then stay alive so someone can log in and click it.
+#
+# Sign in to AppVeyor with GitHub, add Jostein/Radio as a project, and start a
+# build. The log prints the RDP address and password for the paused worker; the
+# build finishes when the "lock" file on that desktop is deleted.
+
+version: '{build}'
+image: Visual Studio 2022
+
+install:
+  - ps: |
+      if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
+        Invoke-WebRequest https://win.rustup.rs/x86_64 -OutFile rustup-init.exe
+        .\rustup-init.exe -y --default-toolchain stable --profile minimal
+      }
+  - set PATH=%USERPROFILE%\.cargo\bin;%PATH%
+  - cargo -V
+  - rustc -V
+
+build_script:
+  - cd Platforms
+  - cargo build --release --locked -p radio
+  - cargo test --release --locked -p radio-core
+  - ps: |
+      $exe = Get-Item target\release\radio.exe
+      "{0:N1} MB  radio.exe" -f ($exe.Length / 1MB)
+
+# Keep the worker alive after the build so it can be driven over RDP. The helper
+# prints the connection details and waits for the lock file to be removed.
+on_finish:
+  - ps: $blockRdp = $true; iex ((new-object net.webclient).DownloadString('https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-rdp.ps1'))
