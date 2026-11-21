@@ -14,6 +14,26 @@ final class RadioPlayer {
 
     static let maxReconnectAttempts = 6
 
+    /// Judges a stream by whether its clock moves. AVPlayer can report
+    /// `.playing` while nothing is decoded, so the position is the only honest
+    /// signal that sound is being produced.
+    struct ProgressWatchdog {
+        private var lastPosition: Double = 0
+
+        mutating func reset(at position: Double = 0) {
+            lastPosition = position.isFinite ? position : 0
+        }
+
+        /// True when the clock moved far enough since the last sample to count
+        /// as playback. Positions that are not numbers never count.
+        mutating func advanced(to position: Double) -> Bool {
+            guard position.isFinite else { return false }
+            let moved = position > lastPosition + 0.5
+            lastPosition = position
+            return moved
+        }
+    }
+
     private(set) var current: Station?
     private(set) var state: State = .idle
 
@@ -61,10 +81,10 @@ final class RadioPlayer {
     private var stalledTicks = 0
     private var healthyTicks = 0
 
-    /// Clock position at the last health poll. `timeControlStatus` alone is not
-    /// enough: told not to wait for buffering, AVPlayer reports `.playing` while
-    /// the stream sits at 0.0 and never starts. Only an advancing clock counts.
-    private var lastPosition: Double = 0
+    /// `timeControlStatus` alone is not enough: told not to wait for buffering,
+    /// AVPlayer reported `.playing` while the stream sat at 0.0 and never
+    /// started. Only an advancing clock counts.
+    private var watchdog = ProgressWatchdog()
 
     private let nowPlaying = NowPlayingMonitor()
 
@@ -177,7 +197,7 @@ final class RadioPlayer {
 
     private func resume() {
         avPlayer.play()
-        lastPosition = avPlayer.currentTime().seconds
+        watchdog.reset(at: avPlayer.currentTime().seconds)
         stalledTicks = 0
         healthyTicks = 0
         state = .playing
@@ -243,7 +263,7 @@ final class RadioPlayer {
         avPlayer.play()
 
         resolvedURL = url
-        lastPosition = 0
+        watchdog.reset()
         nowPlaying.start(for: url, item: item)
     }
 
@@ -340,11 +360,9 @@ final class RadioPlayer {
     private func checkHealth() {
         guard isActive else { return }
 
-        let position = avPlayer.currentTime().seconds
-        let advanced = position.isFinite && position > lastPosition + 0.5
-        if position.isFinite { lastPosition = position }
+        let moved = watchdog.advanced(to: avPlayer.currentTime().seconds)
 
-        if avPlayer.timeControlStatus == .playing && advanced {
+        if avPlayer.timeControlStatus == .playing && moved {
             stalledTicks = 0
             healthyTicks += 1
             // Only forgive earlier failures after sustained healthy playback, so
