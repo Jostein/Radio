@@ -72,6 +72,7 @@ final class RadioPlayer {
 
     private var statusObservation: NSKeyValueObservation?
     private var failureObserver: NSObjectProtocol?
+    private var endObserver: NSObjectProtocol?
     private var wakeObserver: NSObjectProtocol?
 
     private var reconnectWorkItem: DispatchWorkItem?
@@ -85,6 +86,11 @@ final class RadioPlayer {
     /// AVPlayer reported `.playing` while the stream sat at 0.0 and never
     /// started. Only an advancing clock counts.
     private var watchdog = ProgressWatchdog()
+
+    /// True once this item has actually produced moving audio. Startup also
+    /// reports `.paused` while AVPlayer follows a redirect, and that must not be
+    /// mistaken for a stream that ended.
+    private var hasPlayed = false
 
     private let nowPlaying = NowPlayingMonitor()
 
@@ -120,6 +126,20 @@ final class RadioPlayer {
             }
         }
 
+        // A live stream whose server closes the connection reaches the end of
+        // the item and pauses itself, without ever reporting a failure. the station's
+        // AAC stream does this; left alone the app sits silent and still looks
+        // like it is playing.
+        endObserver = NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemDidPlayToEndTime,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let self, let item = notification.object as? AVPlayerItem,
+                  item === self.avPlayer.currentItem else { return }
+            DispatchQueue.main.async { self.handleFailure("The stream ended.") }
+        }
+
         // Sleep freezes the socket and the watchdog, so treat waking as a fresh
         // tune-in rather than trusting a connection that sat idle for hours.
         wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
@@ -135,6 +155,9 @@ final class RadioPlayer {
         nowPlaying.stop()
         if let failureObserver {
             NotificationCenter.default.removeObserver(failureObserver)
+        }
+        if let endObserver {
+            NotificationCenter.default.removeObserver(endObserver)
         }
         if let wakeObserver {
             NSWorkspace.shared.notificationCenter.removeObserver(wakeObserver)
@@ -198,6 +221,7 @@ final class RadioPlayer {
     private func resume() {
         avPlayer.play()
         watchdog.reset(at: avPlayer.currentTime().seconds)
+        hasPlayed = false
         stalledTicks = 0
         healthyTicks = 0
         state = .playing
@@ -248,15 +272,24 @@ final class RadioPlayer {
         healthyTicks = 0
 
         let item = AVPlayerItem(url: url)
-        // A live stream never seeks, so the default forward buffer only costs
+        // A live HLS stream never seeks, so its default forward buffer only costs
         // memory and start-up latency. Measured on this Mac, with the same
         // station: 16 MB footprint at the default buffer, 13 MB at six seconds.
+        //
+        // Only HLS gets that cut. On a progressive Icecast stream a short forward
+        // buffer makes the player stop reading once it is full, and servers close
+        // the idle connection: an AAC stream then ended every few seconds, over and
+        // over, until the buffer was left at its default. Off, the same stream ran
+        // 70 seconds with no reconnect in one run and one early end in another;
+        // on, it managed four to eight early ends every run.
         //
         // Leave `automaticallyWaitsToMinimizeStalling` alone. Turning it off was
         // tried here and left the player reporting `.playing` at 0.0 seconds for
         // good, silent until the user paused and played again; the clock never
         // moved. Waiting for the buffer is what makes the first second audible.
-        item.preferredForwardBufferDuration = 6
+        if url.path.lowercased().hasSuffix(".m3u8") {
+            item.preferredForwardBufferDuration = 6
+        }
         observe(item)
         avPlayer.replaceCurrentItem(with: item)
         avPlayer.volume = Float(volume)
@@ -264,6 +297,7 @@ final class RadioPlayer {
 
         resolvedURL = url
         watchdog.reset()
+        hasPlayed = false
         nowPlaying.start(for: url, item: item)
     }
 
@@ -360,9 +394,19 @@ final class RadioPlayer {
     private func checkHealth() {
         guard isActive else { return }
 
+        // PAUSED while we mean to be playing means AVPlayer stopped on its own,
+        // which is what an upstream connection close looks like. Rebuild at once
+        // rather than counting stall ticks; 20 s of silence to notice is worse
+        // than one short gap.
+        if avPlayer.timeControlStatus == .paused && hasPlayed {
+            handleFailure("The stream ended.")
+            return
+        }
+
         let moved = watchdog.advanced(to: avPlayer.currentTime().seconds)
 
         if avPlayer.timeControlStatus == .playing && moved {
+            hasPlayed = true
             stalledTicks = 0
             healthyTicks += 1
             // Only forgive earlier failures after sustained healthy playback, so

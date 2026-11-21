@@ -77,7 +77,11 @@ the app writes, and where its limits are.
 A dropped or stalled stream is rebuilt with exponential backoff — 1s, 2s, 4s,
 8s, 16s, 30s, six attempts — and the menu says `Reconnecting (2 of 6)…`. A
 five-second watchdog catches a stream that has gone silent without reporting an
-error, which is the failure that looks like "it just stopped".
+error, which is the failure that looks like "it just stopped": it only counts a
+clock that is actually moving, because the player can say it is playing while
+nothing is decoded. A stream the server closes ends the same way — the item
+pauses by itself — so that is rebuilt at once, a second later, instead of
+waiting to be judged silent.
 
 ### How the track is found
 
@@ -114,10 +118,12 @@ Measured on this laptop and in a Debian VM:
 
 - **macOS:** a 370 KB binary, 16 MB footprint idle, of which 13 MB is an empty
   AppKit status item — the app is about 3 MB over its framework. Streaming adds
-  AVFoundation's buffer: 15 MB footprint with a six-second live buffer instead
-  of the default. Getting the last 2 MB by also telling AVPlayer not to wait for
-  that buffer was tried and reverted: the app then reported playing while the
-  stream sat silently at zero until the user paused and played again.
+  AVFoundation's buffer: 15 MB footprint, with a six-second buffer on HLS streams
+  instead of the default. Progressive Icecast streams keep the default: a short
+  forward buffer made an AAC stream stop, be closed by the server, and restart every
+  few seconds. Getting 2 MB more by also telling AVPlayer not to wait for that
+  buffer was tried and reverted — the app then reported playing while the stream
+  sat silently at zero until the user paused and played again.
 - **Linux:** 32.6 MB idle and 34.9 MB playing, 0.00% of a core when idle and
   about 0.65% playing, with ffmpeg alongside at 0.75%. Pausing releases the sound
   device rather than holding it.
