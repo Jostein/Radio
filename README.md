@@ -14,6 +14,9 @@ of that is the app rather than macOS.
   reconnecting, nothing in the Dock.
 - **Stations with titles.** Added in a dialog that suggests the station's own
   name, removed from a submenu, remembered between launches.
+- **Find stations by name.** A small panel searches the public Radio Browser
+  directory and plays what you pick. The query runs only while the panel is open;
+  nothing is bundled, preloaded or cached, so an idle app is unaffected.
 - **Any stream.** `.m3u8` HLS, plain Icecast MP3 or AAC, and `.m3u` or `.pls`
   playlist links, resolved to the stream inside.
 - **Keeps playing.** Dropped or stalled streams are rebuilt with backoff, and a
@@ -129,6 +132,11 @@ Measured on this laptop and in a Debian VM:
   about 0.65% playing, with ffmpeg alongside at 0.75%. Pausing releases the sound
   device rather than holding it.
 
+Opening any dialog costs about 10 MB once: AppKit materialises its window and text
+stack the first time a window is shown, and macOS keeps it. The add dialog has
+always done this. Search adds roughly 2 MB while its panel is open, and releases
+its results, request and session on close.
+
 ### Where data lives
 
 - Stations: `~/Library/Application Support/Radio/stations.json`
@@ -167,6 +175,8 @@ Sources/Radio/YouTubeSearch.swift  track search in the default browser
 Sources/Radio/StationStore.swift  JSON-backed station list
 Sources/Radio/Station.swift       station model + URL validation
 Sources/Radio/AddStationForm.swift  title/URL dialog with inline validation
+Sources/Radio/StationDirectory.swift  Radio Browser search, one request per query
+Sources/Radio/StationFinder.swift  find-and-play panel, alive only while open
 docs/index.html                   landing page
 Platforms/                        Rust port for Linux and Windows
                                   (see Platforms/README.md)
@@ -175,6 +185,9 @@ Platforms/                        Rust port for Linux and Windows
 ### Notes and limits
 
 - Only the first entry of a playlist is used; there is no multi-entry selector.
+- Search asks radio-browser.info by station name and needs a network connection.
+  The app sends the typed words and nothing else; results are not stored.
+- Search exists on macOS only. The Rust port still has add-by-URL alone.
 - One stream plays at a time.
 - The app is ad-hoc signed for local use. It is not notarized and not sandboxed,
   so it is not ready for distribution as-is.

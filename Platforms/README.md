@@ -219,6 +219,7 @@ Three things to watch for, because they are the parts most likely to need a fix:
 |---|---|---|
 | Menu bar / tray only | yes | yes |
 | Stations by URL + title | dialog | dialog (GTK on Linux, Win32 on Windows), same validation |
+| Find stations by name (Radio Browser) | yes | not yet |
 | Volume | slider, persisted | Louder / Quieter items, persisted |
 | ICY, feeds, discovery | yes | yes (same rules, same caps) |
 | HLS | AVPlayer | ffmpeg |

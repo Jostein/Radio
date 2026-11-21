@@ -5,6 +5,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let player = RadioPlayer()
     private let systemNowPlaying = SystemNowPlaying()
     private let menu = NSMenu()
+    private var finder: StationFinder?
 
     private var statusItem: NSStatusItem!
     private weak var headerItem: NSMenuItem?
@@ -221,6 +222,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         add.image = Self.symbol("plus")
         menu.addItem(add)
 
+        let find = NSMenuItem(title: "Find Station…", action: #selector(findStation), keyEquivalent: "f")
+        find.target = self
+        find.image = Self.symbol("magnifyingglass")
+        menu.addItem(find)
+
         if !store.stations.isEmpty {
             let removeRoot = NSMenuItem(title: "Remove Station", action: nil, keyEquivalent: "")
             removeRoot.submenu = removalSubmenu()
@@ -316,5 +322,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let form = AddStationForm()
         guard let station = form.runModal() else { return }
         store.add(station)
+    }
+
+    /// Opens the search panel. The panel keeps its own results and request only
+    /// while it is on screen, so an idle app gains nothing to hold.
+    @objc private func findStation() {
+        if let finder {
+            finder.show()
+            return
+        }
+
+        let finder = StationFinder { [weak self] station in
+            guard let self else { return }
+            if let existing = self.store.stations.first(where: { $0.urlString == station.urlString }) {
+                self.player.play(existing)
+            } else {
+                self.store.add(station)
+                self.player.play(station)
+            }
+        }
+        finder.onClose = { [weak self] in self?.finder = nil }
+        self.finder = finder
+        finder.show()
     }
 }
