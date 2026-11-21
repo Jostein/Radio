@@ -290,17 +290,23 @@ extension NowPlayingMonitor: AVPlayerItemMetadataOutputPushDelegate {
         didOutputTimedMetadataGroups groups: [AVTimedMetadataGroup],
         from track: AVPlayerItemTrack?
     ) {
-        guard let detected = Self.trackTitle(in: groups) else { return }
-        setTitle(detected)
+        guard !groups.isEmpty else { return }
+        // Values are loaded asynchronously; `item.value` has been deprecated
+        // since macOS 13 because it blocks.
+        Task { @MainActor [weak self] in
+            guard let detected = await Self.trackTitle(in: groups) else { return }
+            self?.setTitle(detected)
+        }
     }
 
-    private static func trackTitle(in groups: [AVTimedMetadataGroup]) -> String? {
+    private static func trackTitle(in groups: [AVTimedMetadataGroup]) async -> String? {
         for group in groups {
             var title: String?
             var artist: String?
 
             for item in group.items {
-                guard let value = (item.value as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
+                let loaded = try? await item.load(.value)
+                guard let value = (loaded as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
                       !value.isEmpty
                 else { continue }
 

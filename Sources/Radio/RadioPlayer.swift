@@ -94,10 +94,6 @@ final class RadioPlayer {
 
     private let nowPlaying = NowPlayingMonitor()
 
-    /// The resolved stream URL, once a playlist has been unwrapped. Distinct
-    /// from `Station.streamURL`, which is whatever the user saved.
-    private var resolvedURL: URL?
-
     /// Watchdog cadence, and how many consecutive unhealthy polls before the
     /// stream is rebuilt.
     private let tickInterval: TimeInterval = 5
@@ -175,7 +171,6 @@ final class RadioPlayer {
         guard let url = station.streamURL else {
             generation += 1
             detachItem()
-            resolvedURL = nil
             state = .failed("That stream URL isn’t valid.")
             onChange?()
             return
@@ -188,9 +183,9 @@ final class RadioPlayer {
         guard let current else { return }
         if isActive {
             pause()
-        } else if let item = avPlayer.currentItem, item.status == .readyToPlay {
-            resume()
         } else {
+            // Pausing hangs up, so there is never a loaded item to resume from:
+            // start the station again and rejoin the live broadcast.
             play(current)
         }
     }
@@ -205,7 +200,6 @@ final class RadioPlayer {
         // for the output device, so a little sound can still arrive after the
         // click. Resuming rejoins the live stream anyway, so nothing is lost.
         detachItem()
-        resolvedURL = nil
         state = current == nil ? .idle : .paused
         onChange?()
     }
@@ -217,26 +211,8 @@ final class RadioPlayer {
         avPlayer.pause()
         detachItem()
         current = nil
-        resolvedURL = nil
         reconnectAttempt = 0
         state = .idle
-        onChange?()
-    }
-
-    private func resume() {
-        avPlayer.play()
-        watchdog.reset(at: avPlayer.currentTime().seconds)
-        hasPlayed = false
-        stalledTicks = 0
-        healthyTicks = 0
-        state = .playing
-        startHealthTimer()
-
-        // Pausing tore the metadata reader down; bring it back for the same item.
-        if let resolvedURL, let item = avPlayer.currentItem {
-            nowPlaying.start(for: resolvedURL, item: item)
-        }
-
         onChange?()
     }
 
@@ -300,7 +276,6 @@ final class RadioPlayer {
         avPlayer.volume = Float(volume)
         avPlayer.play()
 
-        resolvedURL = url
         watchdog.reset()
         hasPlayed = false
         nowPlaying.start(for: url, item: item)
