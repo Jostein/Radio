@@ -5,7 +5,7 @@ it a title, and tune in — no window, no Dock icon, no browser tab.
 
 macOS is the original, Swift and AppKit build. Linux and Windows run the same app
 from one Rust codebase, with the same stations file and the same menu. Light by
-design: 370 KB on disk, 16 MB of footprint when idle on this Mac — and about 3 MB
+design: 480 KB on disk, 16 MB of footprint when idle on this Mac — and about 3 MB
 of that is the app rather than macOS.
 
 ## What it does
@@ -120,7 +120,7 @@ keyboard media keys and AirPods or headphone buttons work.
 
 Measured on this laptop and in a Debian VM:
 
-- **macOS:** a 370 KB binary, 16 MB footprint idle, of which 13 MB is an empty
+- **macOS:** a 480 KB binary, 16 MB footprint idle, of which 13 MB is an empty
   AppKit status item — the app is about 3 MB over its framework. Streaming adds
   AVFoundation's buffer: 15 MB footprint, with a six-second buffer on HLS streams
   instead of the default. Progressive Icecast streams keep the default: with a
