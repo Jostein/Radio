@@ -122,8 +122,8 @@ Measured on this laptop and in a Debian VM:
 
 - **macOS:** a 480 KB binary, 15 MB footprint idle, of which 13 MB is an empty
   AppKit status item — the app is about 2 MB over its framework. Playing adds
-  AVFoundation's buffer: 22 MB footprint on an HLS stream with a six-second
-  buffer, about 0.2% of a core. Progressive Icecast streams keep the default
+  AVFoundation's buffer: about 22–23 MB footprint on an HLS stream with a
+  six-second buffer, about 0.2% of a core. Progressive Icecast streams keep the default
   buffer: with a short forward buffer the player stops reading once it is full,
   the server closes the idle connection, and the stream restarts every few
   seconds. Getting 2 MB more by also telling AVPlayer not to wait for that
