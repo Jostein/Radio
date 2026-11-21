@@ -201,6 +201,11 @@ final class RadioPlayer {
         // Keep the track that was playing on screen while paused.
         nowPlaying.stop(clearingTitle: false)
         avPlayer.pause()
+        // Detach as well. Pausing alone leaves the audio already decoded queued
+        // for the output device, so a little sound can still arrive after the
+        // click. Resuming rejoins the live stream anyway, so nothing is lost.
+        detachItem()
+        resolvedURL = nil
         state = current == nil ? .idle : .paused
         onChange?()
     }

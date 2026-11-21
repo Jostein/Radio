@@ -81,7 +81,8 @@ error, which is the failure that looks like "it just stopped": it only counts a
 clock that is actually moving, because the player can say it is playing while
 nothing is decoded. A stream the server closes ends the same way — the item
 pauses by itself — so that is rebuilt at once, a second later, instead of
-waiting to be judged silent.
+waiting to be judged silent. Pausing hangs up on the stream rather than holding
+a buffer: the sound stops at the click, and resuming rejoins the live broadcast.
 
 ### How the track is found
 
