@@ -45,7 +45,9 @@ jobs:
           xcrun simctl boot "$device" || true
           xcrun simctl bootstatus "$device" -b
           xcrun simctl install "$device" Mobile/iOS/build/Build/Products/Debug-iphonesimulator/Radio.app
-          xcrun simctl launch "$device" local.radio.app
+          output=$(xcrun simctl launch "$device" local.radio.app)
+          echo "$output"
+          pid=${output##*: }
           sleep 5
-          xcrun simctl spawn "$device" ps -A | grep -q Radio
+          ps -p "$pid" >/dev/null
           echo "Radio is running in the simulator"
