@@ -8,6 +8,20 @@ from one Rust codebase, with the same stations file and the same menu. Light by
 design: 480 KB on disk, 15 MB of footprint when idle on this Mac — and about 2 MB
 of that is the app rather than macOS.
 
+## Download
+
+Prebuilt desktop builds are on the [releases page](https://github.com/Jostein/Radio/releases/latest):
+
+| Platform | Asset | Notes |
+|---|---|---|
+| **macOS 14+** | `Radio-1.3-macos.zip` | Universal Apple silicon and Intel app; ad-hoc signed, not notarized |
+| **Windows 10/11 x86_64** | `Radio-1.3-windows-x86_64.zip` | Unsigned; `ffmpeg` must be on `PATH` |
+| **Linux x86_64** | `radio-git-r62.97e4a9e-1-x86_64.pkg.tar.zst` | Arch/Omarchy package; other distros build from source |
+
+The builds are independent of any store or AUR account. macOS and Windows are
+not code-signed by a commercial certificate, so the OS may warn on first launch;
+the source and build files are right here to check.
+
 ## What it does
 
 - **Menu bar or tray only.** A waveform while playing, circling arrows while
@@ -193,8 +207,9 @@ Platforms/                        Rust port for Linux and Windows
   The app sends the typed words and nothing else; results are not stored.
 - Search exists on macOS only. The Rust port still has add-by-URL alone.
 - One stream plays at a time.
-- The app is ad-hoc signed for local use. It is not notarized and not sandboxed,
-  so it is not ready for distribution as-is.
+- The macOS app is ad-hoc signed, not notarized and not sandboxed. The Windows
+  build is unsigned. Both are usable from the releases page, but expect an
+  operating-system warning on first launch.
 - On Linux and Windows, stations are shown with a 60-character budget rather than
   a width measured to fit, and volume steps instead of a slider, because a tray
   menu has nowhere to put one.
