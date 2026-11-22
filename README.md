@@ -5,9 +5,10 @@ it a title, and tune in — no window, no Dock icon, no browser tab.
 
 macOS is the original, Swift and AppKit build. Linux and Windows run the same app
 from one Rust codebase, with the same stations file and the same menu. iPhone and
-iPad use a native SwiftUI build in [`Mobile/iOS`](Mobile/iOS/README.md). Light by
-design: 480 KB on disk, 15 MB of footprint when idle on this Mac — and about 2 MB
-of that is the app rather than macOS.
+iPad use a native SwiftUI build in [`Mobile/iOS`](Mobile/iOS/README.md); Android
+uses a native Kotlin/Compose build in [`Mobile/Android`](Mobile/Android/README.md).
+Light by design: 480 KB on disk, 15 MB of footprint when idle on this Mac — and
+about 2 MB of that is the app rather than macOS.
 
 ## Download
 
@@ -87,6 +88,7 @@ runtime this app needs, and would require a separate legacy port.
 | **Linux** | Run end to end in a container and a VM. A laptop's own sound card is still untried. |
 | **Windows** | Started on an AppVeyor worker over RDP: the tray menu and the FIP Reggae reconnect state were observed. Sound and media controls are still untested. |
 | **iOS** | Native SwiftUI app in `Mobile/iOS`; simulator build and launch are verified in CI. No App Store archive yet. |
+| **Android** | Native Kotlin/Compose app in `Mobile/Android`; debug APK builds locally and in CI. Not yet launched on a device or emulator. |
 
 That last column is not modesty, it is the state of the evidence.
 [`Platforms/README.md`](Platforms/README.md) records exactly what has run where.
@@ -204,6 +206,8 @@ Platforms/                        Rust port for Linux and Windows
                                   (see Platforms/README.md)
 Mobile/iOS/                       native SwiftUI iPhone/iPad app
                                   (see Mobile/iOS/README.md)
+Mobile/Android/                   native Kotlin/Compose Android app
+                                  (see Mobile/Android/README.md)
 ```
 
 ### Notes and limits
@@ -211,8 +215,11 @@ Mobile/iOS/                       native SwiftUI iPhone/iPad app
 - Only the first entry of a playlist is used; there is no multi-entry selector.
 - Search asks radio-browser.info by station name and needs a network connection.
   The app sends the typed words and nothing else; results are not stored.
-- Search exists on macOS only. The Rust port and iOS app still have add-by-URL alone.
+- Search exists on macOS only. The Rust port, iOS app and Android app still have
+  add-by-URL alone.
 - One stream plays at a time.
+- Android has no `.m3u`/`.pls` resolver or the desktop/iOS reconnect backoff yet;
+  direct HLS and progressive streams use Media3's retry handling.
 - The macOS app is ad-hoc signed, not notarized and not sandboxed. The Windows
   build is unsigned. Both are usable from the releases page, but expect an
   operating-system warning on first launch.

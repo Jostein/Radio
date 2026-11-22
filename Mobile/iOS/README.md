@@ -37,7 +37,6 @@ development team in Signing & Capabilities first.
 - Find Station search
 - An in-app volume slider (the hardware/system volume is used)
 - App Store archive, signing and TestFlight
-- Android
 
 ## CI
 
