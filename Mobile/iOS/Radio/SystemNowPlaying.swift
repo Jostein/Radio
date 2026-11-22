@@ -6,7 +6,7 @@ import MediaPlayer
 final class SystemNowPlaying {
     private let center = MPNowPlayingInfoCenter.default()
 
-    func install(player: RadioPlayer) {
+    func install(player: Player) {
         let commands = MPRemoteCommandCenter.shared()
 
         commands.playCommand.addTarget { [weak player] _ in
