@@ -73,8 +73,10 @@ cargo run -p radio --release
 The per-distro packages and the Arch-specific `xdotool` note are in
 [`Platforms/README.md`](Platforms/README.md). Arch and Omarchy can install the
 package in `Platforms/packaging/arch` with `makepkg -si`; that README also has
-the autostart and tray steps. GNOME, KDE/Plasma and Omarchy host notes live in
-[`Platforms/packaging/`](Platforms/packaging/).
+the autostart and tray steps. GNOME, KDE/Plasma, Enlightenment and Omarchy host
+notes live in [`Platforms/packaging/`](Platforms/packaging/). IRIX is not a
+supported target: it lacks the modern Rust, GTK 3, ALSA, D-Bus and ffmpeg
+runtime this app needs, and would require a separate legacy port.
 
 ## Platforms
 

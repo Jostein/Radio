@@ -190,9 +190,12 @@ Omarchy hides tray icons behind the tray expander by default. To keep them
 visible, change the `group/tray-expander` entry to `tray` in
 `~/.config/waybar/config.jsonc` (Setup → Config → Waybar opens it).
 
-GNOME and KDE/Plasma need no separate binaries; their host notes are in
-`packaging/gnome/README.md` and `packaging/kde/README.md`. Omarchy's optional
-Waybar module lives in `packaging/omarchy/waybar/`.
+GNOME, KDE/Plasma and Enlightenment need no separate binaries; their host notes
+are in `packaging/gnome/README.md`, `packaging/kde/README.md` and
+`packaging/enlightenment/README.md`. Omarchy's optional Waybar module lives in
+`packaging/omarchy/waybar/`. IRIX is not a Linux target: it lacks the modern
+Rust, GTK 3, ALSA, D-Bus and ffmpeg runtime this app needs, and would require a
+separate legacy port.
 
 **Debian / Ubuntu** (what was actually built and run here)
 
