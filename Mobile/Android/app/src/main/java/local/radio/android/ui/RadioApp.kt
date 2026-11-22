@@ -1,5 +1,6 @@
 package local.radio.android.ui
 
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -13,6 +14,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -22,6 +25,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -35,10 +39,12 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -50,13 +56,29 @@ import local.radio.android.Station
 @Composable
 fun RadioApp(viewModel: RadioViewModel = viewModel()) {
     var showAdd by rememberSaveable { mutableStateOf(false) }
+    var addFocused by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Radio") },
                 actions = {
-                    IconButton(onClick = { showAdd = true }) {
+                    IconButton(
+                        onClick = { showAdd = true },
+                        modifier = Modifier
+                            .onFocusChanged { addFocused = it.isFocused }
+                            .then(
+                                if (addFocused) {
+                                    Modifier.border(
+                                        2.dp,
+                                        MaterialTheme.colorScheme.primary,
+                                        CircleShape,
+                                    )
+                                } else {
+                                    Modifier
+                                }
+                            ),
+                    ) {
                         Icon(Icons.Default.Add, contentDescription = "Add station")
                     }
                 },
@@ -101,9 +123,23 @@ fun RadioApp(viewModel: RadioViewModel = viewModel()) {
             }
 
             item {
+                var addButtonFocused by remember { mutableStateOf(false) }
                 OutlinedButton(
                     onClick = { showAdd = true },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .onFocusChanged { addButtonFocused = it.isFocused }
+                        .then(
+                            if (addButtonFocused) {
+                                Modifier.border(
+                                    2.dp,
+                                    MaterialTheme.colorScheme.primary,
+                                    RoundedCornerShape(20.dp),
+                                )
+                            } else {
+                                Modifier
+                            }
+                        ),
                 ) {
                     Icon(Icons.Default.Add, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
@@ -133,6 +169,8 @@ private fun NowPlayingCard(
     canPlay: Boolean,
     onToggle: () -> Unit,
 ) {
+    var toggleFocused by remember { mutableStateOf(false) }
+
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(20.dp),
@@ -155,7 +193,23 @@ private fun NowPlayingCard(
                 overflow = TextOverflow.Ellipsis,
             )
             Spacer(Modifier.height(4.dp))
-            Button(onClick = onToggle, enabled = canPlay) {
+            Button(
+                onClick = onToggle,
+                enabled = canPlay,
+                modifier = Modifier
+                    .onFocusChanged { toggleFocused = it.isFocused }
+                    .then(
+                        if (toggleFocused) {
+                            Modifier.border(
+                                2.dp,
+                                MaterialTheme.colorScheme.primary,
+                                RoundedCornerShape(20.dp),
+                            )
+                        } else {
+                            Modifier
+                        }
+                    ),
+            ) {
                 Icon(
                     imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                     contentDescription = null,
@@ -174,16 +228,31 @@ private fun StationRow(
     onPlay: () -> Unit,
     onDelete: () -> Unit,
 ) {
+    var focused by remember { mutableStateOf(false) }
+    var deleteFocused by remember { mutableStateOf(false) }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
+            .onFocusChanged { focused = it.isFocused }
+            .then(
+                if (focused) {
+                    Modifier.border(
+                        2.dp,
+                        MaterialTheme.colorScheme.primary,
+                        RoundedCornerShape(12.dp),
+                    )
+                } else {
+                    Modifier
+                }
+            )
             .clickable(onClick = onPlay),
         colors = if (isCurrent) {
-            androidx.compose.material3.CardDefaults.cardColors(
+            CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.secondaryContainer,
             )
         } else {
-            androidx.compose.material3.CardDefaults.cardColors()
+            CardDefaults.cardColors()
         },
     ) {
         Row(
@@ -207,7 +276,22 @@ private fun StationRow(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            IconButton(onClick = onDelete) {
+            IconButton(
+                onClick = onDelete,
+                modifier = Modifier
+                    .onFocusChanged { deleteFocused = it.isFocused }
+                    .then(
+                        if (deleteFocused) {
+                            Modifier.border(
+                                2.dp,
+                                MaterialTheme.colorScheme.primary,
+                                CircleShape,
+                            )
+                        } else {
+                            Modifier
+                        }
+                    ),
+            ) {
                 Icon(Icons.Default.Delete, contentDescription = "Delete ${station.title}")
             }
         }

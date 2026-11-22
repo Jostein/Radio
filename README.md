@@ -6,9 +6,10 @@ it a title, and tune in — no window, no Dock icon, no browser tab.
 macOS is the original, Swift and AppKit build. Linux and Windows run the same app
 from one Rust codebase, with the same stations file and the same menu. iPhone and
 iPad use a native SwiftUI build in [`Mobile/iOS`](Mobile/iOS/README.md); Android
-uses a native Kotlin/Compose build in [`Mobile/Android`](Mobile/Android/README.md).
-Light by design: 480 KB on disk, 15 MB of footprint when idle on this Mac — and
-about 2 MB of that is the app rather than macOS.
+phones, tablets and TVs use a native Kotlin/Compose build in
+[`Mobile/Android`](Mobile/Android/README.md). Light by design: 480 KB on disk,
+15 MB of footprint when idle on this Mac — and about 2 MB of that is the app
+rather than macOS.
 
 ## Download
 
@@ -88,7 +89,7 @@ runtime this app needs, and would require a separate legacy port.
 | **Linux** | Run end to end in a container and a VM. A laptop's own sound card is still untried. |
 | **Windows** | Started on an AppVeyor worker over RDP: the tray menu and the FIP Reggae reconnect state were observed. Sound and media controls are still untested. |
 | **iOS** | Native SwiftUI app in `Mobile/iOS`; simulator build and launch are verified in CI. No App Store archive yet. |
-| **Android** | Native Kotlin/Compose app in `Mobile/Android`; debug APK builds locally and in CI. Not yet launched on a device or emulator. |
+| **Android** | Native Kotlin/Compose app in `Mobile/Android`; the same APK has a Leanback launcher and D-pad focus for Android TV. Debug APK builds locally and in CI. Not yet launched on a device, TV or emulator. |
 
 That last column is not modesty, it is the state of the evidence.
 [`Platforms/README.md`](Platforms/README.md) records exactly what has run where.
@@ -219,7 +220,9 @@ Mobile/Android/                   native Kotlin/Compose Android app
   add-by-URL alone.
 - One stream plays at a time.
 - Android has no `.m3u`/`.pls` resolver or the desktop/iOS reconnect backoff yet;
-  direct HLS and progressive streams use Media3's retry handling.
+  direct HLS and progressive streams use Media3's retry handling. The TV build
+  is the same APK with a Leanback entry and remote-focus states, not a separate
+  leanback layout.
 - The macOS app is ad-hoc signed, not notarized and not sandboxed. The Windows
   build is unsigned. Both are usable from the releases page, but expect an
   operating-system warning on first launch.
