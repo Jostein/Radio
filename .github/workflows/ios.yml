@@ -33,5 +33,28 @@ jobs:
             -configuration Debug \
             -sdk iphonesimulator \
             -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$PWD/Mobile/iOS/build" \
             CODE_SIGNING_ALLOWED=NO \
             build
+
+      - name: Launch in iOS Simulator
+        run: |
+          set -euo pipefail
+          device=$(xcrun simctl list devices available -j | python3 -c '
+import json, sys
+data = json.load(sys.stdin)["devices"]
+for runtime, devices in sorted(data.items()):
+    for device in devices:
+        if device.get("isAvailable") and device["name"].startswith("iPhone"):
+            print(device["udid"])
+            sys.exit(0)
+raise SystemExit("No iPhone simulator is installed")
+')
+          echo "Using simulator $device"
+          xcrun simctl boot "$device" || true
+          xcrun simctl bootstatus "$device" -b
+          xcrun simctl install "$device" Mobile/iOS/build/Build/Products/Debug-iphonesimulator/Radio.app
+          xcrun simctl launch "$device" local.radio.app
+          sleep 5
+          xcrun simctl spawn "$device" ps -A | grep -q Radio
+          echo "Radio is running in the simulator"
