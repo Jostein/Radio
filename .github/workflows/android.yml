@@ -23,19 +23,27 @@ jobs:
       run:
         working-directory: Mobile/Android
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "21"
 
-      - uses: android-actions/setup-android@v3
-
       - name: Install Android SDK 37
         run: |
-          yes | sdkmanager --licenses >/dev/null
-          sdkmanager "platforms;android-37.0" "build-tools;36.0.0"
+          set -euo pipefail
+          sdk_root="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          echo "ANDROID_HOME=$sdk_root" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$sdk_root" >> "$GITHUB_ENV"
+          echo "sdk.dir=$sdk_root" > local.properties
+
+          sdkmanager="$(command -v sdkmanager || true)"
+          if [ -z "$sdkmanager" ]; then
+            sdkmanager="$(find "$sdk_root/cmdline-tools" -name sdkmanager -type f | head -n 1)"
+          fi
+          yes | "$sdkmanager" --licenses >/dev/null || true
+          "$sdkmanager" --install "platforms;android-37.0" "build-tools;36.0.0"
 
       - name: Build debug APK
         run: ./gradlew :app:assembleDebug --no-daemon
