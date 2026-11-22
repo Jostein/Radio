@@ -17,7 +17,11 @@ install:
   - ps: |
       if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
         Invoke-WebRequest https://win.rustup.rs/x86_64 -OutFile rustup-init.exe
-        .\rustup-init.exe -y --default-toolchain stable --profile minimal
+        # rustup writes progress to stderr; PowerShell turns that into a native
+        # command error when run directly, which aborts the build before the
+        # build script. Start-Process only reports the exit code.
+        $p = Start-Process .\rustup-init.exe -ArgumentList @('-y', '--default-toolchain', 'stable', '--profile', 'minimal') -Wait -PassThru -NoNewWindow
+        if ($p.ExitCode -ne 0) { throw "rustup-init failed: $($p.ExitCode)" }
       }
   - set PATH=%USERPROFILE%\.cargo\bin;%PATH%
   - cargo -V
