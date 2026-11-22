@@ -1,0 +1,24 @@
+pkgbase = radio-git
+	pkgdesc = Internet radio in the menu bar or tray
+	pkgver = r61.2ebdcfa
+	pkgrel = 1
+	url = https://github.com/Jostein/Radio
+	arch = x86_64
+	arch = aarch64
+	license = CC0-1.0
+	makedepends = rust
+	makedepends = pkgconf
+	depends = gtk3
+	depends = libayatana-appindicator
+	depends = alsa-lib
+	depends = ffmpeg
+	depends = xdotool
+	optdepends = gnome-shell-extension-appindicator: tray icon on GNOME
+	optdepends = playerctl: media controls and the Omarchy Waybar module
+	provides = radio
+	conflicts = radio
+	options = !lto
+	source = git+https://github.com/Jostein/Radio.git
+	sha256sums = SKIP
+
+pkgname = radio-git

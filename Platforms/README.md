@@ -9,7 +9,7 @@ The macOS build is documented in the [root README](../README.md). All three are
 meant to behave alike; this file records where the evidence for these two
 currently stops.
 
-> **Status: runs on Linux, builds and tests itself on Windows.** Verified with
+> **Status: runs on Linux and has now run on Windows.** Verified with
 > Rust 1.100:
 >
 > - `cargo build` / `cargo build --release` — clean on macOS.
@@ -21,7 +21,14 @@ currently stops.
 >   message pump and the hidden window type-check against the MSVC target too.
 >   CI builds it with MSVC and runs the core tests on every change to
 >   `Platforms` — 2.9 MB, 17/17 (`.github/workflows/windows.yml`).
->   **Nothing has been run on Windows yet.**
+> - Windows (AppVeyor's Visual Studio 2022 worker, over RDP): MSVC release build
+>   in 4m 11s. It first exited with `No audio output device is available.`;
+>   after starting `Audiosrv` and `AudioEndpointBuilder` it stayed up and its tray
+>   menu opened. The Stations submenu listed FIP Reggae and the header read
+>   `FIP Reggae — Reconnecting (4 of 6)…`. No sound was heard, and the media
+>   flyout, media keys, pause/resume and reconnect recovery were not exercised.
+>   The binary is console-subsystem, so it occupies the console it is launched
+>   from; Windows puts a new tray icon in the overflow by default.
 > - Linux, headless (Xvfb, a private session bus, ALSA `null` output): the binary
 >   starts, loads libayatana-appindicator, decodes a live MP3 stream to 44.1 kHz
 >   PCM through cpal/ALSA at real time, and shows ICY track titles within about a
@@ -39,8 +46,8 @@ currently stops.
 >   `max_volume: -0.4 dB` — and pause returns MPRIS to `Paused`. The card is
 >   virtual; a laptop's own audio hardware is still unproven.
 > - Windows media controls: SMTC compiles and links, and the hidden window it is
->   bound to is created before the app starts. Needs a real Windows to prove the
->   flyout, the media keys and the metadata.
+>   bound to is created before the app starts. The tray has now run on Windows,
+>   but the flyout, the media keys and the metadata have not been exercised.
 >
 > **Linux tray and menu: observed.** In the same container, with sway on its
 > headless backend and waybar's `tray` module as the host, the 32×32 icon renders
@@ -56,9 +63,11 @@ currently stops.
 > the icon inside GNOME's AppIndicator extension or Plasma's tray (only waybar
 > has hosted it), a real pointer click on a real menu (activation went over
 > D-Bus, not through a cursor), HiDPI, multi-monitor, and sound through a
-> laptop's own audio hardware — PipeWire was proven on a VM's virtual card. And
-> on Windows, the whole runtime: it builds, links and passes its tests, but no
-> tray, no flyout, no media key has ever run there.
+> laptop's own audio hardware — PipeWire was proven on a VM's virtual card. On
+> Windows the tray, its menu, the volume items and the FIP Reggae reconnect
+> state have now been seen; still unobserved there are sound, pause/resume,
+> reconnect recovery, `stations.json` edits while it runs, and the SMTC flyout,
+> media keys and metadata.
 >
 > Two things running it on Linux already fixed: the output is now configured at
 > the device's own default rate (asking for the maximum rate is rejected outright
@@ -127,6 +136,14 @@ Platforms/
     smtc.rs                      Windows: SMTC, media keys and the flyout
     platform.rs                  GTK loop (Linux), message pump + hidden window
                                  (Windows)
+  packaging/                     one Linux binary, host notes and packaging
+    arch/PKGBUILD
+    gnome/README.md
+    kde/README.md
+    omarchy/README.md
+    omarchy/waybar/radio.sh
+    arch/radio.desktop
+    arch/radio.png
 ```
 
 The macOS app in the repository root is untouched and stays the reference
@@ -138,6 +155,21 @@ Needs Rust 1.75 or newer (`rustup`), plus an audio stack and `ffmpeg` on `PATH`.
 
 **Arch / Omarchy**
 
+The package in `Platforms/packaging/arch` installs a `radio` binary, a launcher
+entry and the icon:
+
+```sh
+cd Platforms/packaging/arch
+makepkg -si
+radio
+```
+
+It pulls the same packages as the manual build below, including `ffmpeg` and
+`xdotool` for `libxdo`. The PKGBUILD builds the public repository's `main`, so use
+the checkout instructions when testing changes that are not pushed yet.
+
+To build this checkout instead:
+
 ```sh
 sudo pacman -S rust gtk3 libayatana-appindicator alsa-lib ffmpeg pkgconf xdotool
 cd Platforms
@@ -146,6 +178,21 @@ cargo run -p radio
 
 `xdotool` is there for `libxdo`, which the tray library links against; without it
 the link step fails with `cannot find -lxdo`.
+
+Start it with the Hyprland session in Omarchy 4 by adding this line to
+`~/.config/hypr/autostart.lua`:
+
+```lua
+o.launch_on_start("radio")
+```
+
+Omarchy hides tray icons behind the tray expander by default. To keep them
+visible, change the `group/tray-expander` entry to `tray` in
+`~/.config/waybar/config.jsonc` (Setup → Config → Waybar opens it).
+
+GNOME and KDE/Plasma need no separate binaries; their host notes are in
+`packaging/gnome/README.md` and `packaging/kde/README.md`. Omarchy's optional
+Waybar module lives in `packaging/omarchy/waybar/`.
 
 **Debian / Ubuntu** (what was actually built and run here)
 
@@ -183,7 +230,8 @@ the overflow chevron until you drag it out.
 In the order worth testing, because each later item depends on the earlier ones.
 On Linux, 1–3 and 7 have been exercised — sway/waybar for the tray, a PipeWire VM
 for playback and sound — and 4 only as far as pause: resume and rejoining the
-live edge have not. 5, 6 and everything on Windows are untested:
+live edge have not. On Windows, 1 and the reconnect state in 5 have been seen;
+2 reached that state but no sound was heard, and 3, 4, 6 and 7 are untested:
 
 1. The tray icon appears and the menu opens.
 2. A station plays (the default is FIP Reggae, which is an `.m3u8` and therefore
@@ -200,10 +248,10 @@ live edge have not. 5, 6 and everything on Windows are untested:
 
 Three things to watch for, because they are the parts most likely to need a fix:
 
-- On Windows the tray is created just before the message pump starts. If menu
-  clicks do nothing, the tray has to move inside the loop (create it on the
-  first iteration) — the `muda` docs are explicit that a running event loop is
-  required on that platform.
+- On Windows the tray is created just before the message pump starts. Its menu
+  did open on AppVeyor, so that ordering works there; if clicks ever do nothing,
+  moving the tray into the loop remains the first thing to try — the `muda`
+  docs are explicit that a running event loop is required on that platform.
 - A pause during a slow metadata read clears the track row when that read
   finishes, which can be up to 8 s later. The macOS app answers instantly
   because its reads are asynchronous.
@@ -366,11 +414,13 @@ one decoder covering HLS, MP3, AAC and Ogg.
 
 ## Known gaps, in the order I would fix them
 
-1. Work through the checklist on Windows, where none of it has run: the tray,
-   its menu, the media flyout and the media keys are the parts with no evidence
-   behind them. On Linux the icon, the menu, pause, volume, quit, MPRIS, the add
-   dialog and playback through PipeWire are done; editing `stations.json` while it runs (6)
-   and reconnect (5) are not, and no laptop's own sound card has been tried.
+1. Work through the rest of the checklist on Windows: the tray and menu have now
+   run, but sound, pause/resume, reconnect recovery, file edits and the SMTC
+   flyout and media keys have not. The console-subsystem binary and the
+   audio-endpoint requirement are the two things to decide on next. On Linux the
+   icon, the menu, pause, volume, quit, MPRIS, the add dialog and playback through
+   PipeWire are done; editing `stations.json` while it runs (6) and reconnect (5)
+   are not, and no laptop's own sound card has been tried.
 2. Prove SMTC on a real Windows. It compiles and links, but the flyout, the
    hidden window and the media keys have never been exercised; the window style
    is the part I would expect to need adjusting.

@@ -289,7 +289,9 @@ make run</pre>
         </div>
         <div class="card">
           <h3>Linux</h3>
-          <p>Rust, ffmpeg, GTK 3 and libayatana-appindicator.</p>
+          <p>Rust, ffmpeg, GTK 3 and libayatana-appindicator. Runs under GNOME
+          (with the AppIndicator extension), KDE Plasma and Waybar. Arch / Omarchy
+          users can build the package in Platforms/packaging/arch.</p>
           <pre><span class="c"># Debian / Ubuntu</span>
 sudo apt install build-essential libgtk-3-dev libayatana-appindicator3-dev \
   libasound2-dev libxdo-dev pkg-config ffmpeg
@@ -316,7 +318,7 @@ cargo run -p radio --release</pre>
       <h2>Three platforms</h2>
       <p class="section-lede">
         macOS, Linux and Windows, from one small codebase. The Mac build is the one in daily use;
-        the other two are younger.
+        Linux and Windows are younger, and both have now run.
       </p>
     </section>
 

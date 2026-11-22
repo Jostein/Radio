@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Radio
+GenericName=Internet Radio
+Comment=Internet radio in the tray
+Exec=radio
+Icon=radio
+Terminal=false
+Categories=AudioVideo;Audio;Player;
+Keywords=radio;stream;music;
+StartupNotify=false

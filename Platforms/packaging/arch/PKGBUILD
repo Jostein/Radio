@@ -1,0 +1,38 @@
+# Maintainer: Jostein Huglen <jostein@ovo.io>
+pkgname=radio-git
+pkgver=0
+pkgrel=1
+pkgdesc="Internet radio in the menu bar or tray"
+arch=('x86_64' 'aarch64')
+url="https://github.com/Jostein/Radio"
+license=('CC0-1.0')
+# Arch's makepkg enables global LTO; ring 0.17.14 does not link under it.
+options=(!lto)
+depends=('gtk3' 'libayatana-appindicator' 'alsa-lib' 'ffmpeg' 'xdotool')
+makedepends=('rust' 'pkgconf')
+optdepends=(
+  'gnome-shell-extension-appindicator: tray icon on GNOME'
+  'playerctl: media controls and the Omarchy Waybar module'
+)
+provides=('radio')
+conflicts=('radio')
+source=("git+https://github.com/Jostein/Radio.git")
+sha256sums=('SKIP')
+
+pkgver() {
+  cd "$srcdir/Radio"
+  printf 'r%s.%s' "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+}
+
+build() {
+  cd "$srcdir/Radio/Platforms"
+  cargo build --release --locked -p radio
+}
+
+package() {
+  cd "$srcdir/Radio"
+  install -Dm755 "Platforms/target/release/radio" "$pkgdir/usr/bin/radio"
+  install -Dm644 "$startdir/radio.desktop" "$pkgdir/usr/share/applications/radio.desktop"
+  install -Dm644 "$startdir/radio.png" "$pkgdir/usr/share/icons/hicolor/256x256/apps/radio.png"
+  install -Dm644 "LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

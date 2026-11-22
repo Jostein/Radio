@@ -29,9 +29,9 @@ of that is the app rather than macOS.
 
 ## Quick start
 
-macOS is the build that is tested. The Linux and Windows commands are real and
-work on this project's own test bench, but neither has met a normal desktop yet —
-[Platforms](#platforms) says exactly what has run.
+macOS is the build in daily use. Linux has run in a container and a VM; Windows
+has now run on an AppVeyor worker over RDP. Neither has met a normal laptop's own
+desktop yet — [Platforms](#platforms) says exactly what has run.
 
 ```sh
 # macOS 14+, Command Line Tools. The Xcode app is not needed.
@@ -57,7 +57,10 @@ cargo run -p radio --release
 ```
 
 The per-distro packages and the Arch-specific `xdotool` note are in
-[`Platforms/README.md`](Platforms/README.md).
+[`Platforms/README.md`](Platforms/README.md). Arch and Omarchy can install the
+package in `Platforms/packaging/arch` with `makepkg -si`; that README also has
+the autostart and tray steps. GNOME, KDE/Plasma and Omarchy host notes live in
+[`Platforms/packaging/`](Platforms/packaging/).
 
 ## Platforms
 
@@ -65,7 +68,7 @@ The per-distro packages and the Arch-specific `xdotool` note are in
 |---|---|
 | **macOS** | The original, in daily use. |
 | **Linux** | Run end to end in a container and a VM. A laptop's own sound card is still untried. |
-| **Windows** | Compiles, links and passes the core tests on a real Windows runner. Never started. |
+| **Windows** | Started on an AppVeyor worker over RDP: the tray menu and the FIP Reggae reconnect state were observed. Sound and media controls are still untested. |
 
 That last column is not modesty, it is the state of the evidence.
 [`Platforms/README.md`](Platforms/README.md) records exactly what has run where.
@@ -195,8 +198,9 @@ Platforms/                        Rust port for Linux and Windows
 - On Linux and Windows, stations are shown with a 60-character budget rather than
   a width measured to fit, and volume steps instead of a slider, because a tray
   menu has nowhere to put one.
-- Windows has never been started, and Linux has not yet met a laptop's own sound
-  card.
+- Windows has run only on an AppVeyor worker over RDP, where the tray menu and
+  the FIP Reggae reconnect state were observed; its sound and media controls are
+  still untested. Linux has not yet met a laptop's own sound card.
 - `NSAllowsArbitraryLoadsForMedia` is enabled so plain-`http` radio streams work;
   the exception applies to media loads only.
 
