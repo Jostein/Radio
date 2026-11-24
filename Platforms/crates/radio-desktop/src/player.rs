@@ -296,6 +296,19 @@ impl Player {
             return;
         }
 
+        // A device that goes away under the stream — unplugged, or an RDP session
+        // reconnecting — leaves a stream object that will never play again, and
+        // the app would stay in Playing with a dead speaker. Rebuild it on the
+        // device Windows switched to and reconnect, because the ring has lost its
+        // consumer.
+        if self.audio.failed() {
+            self.audio.reopen();
+            if self.is_active() {
+                self.begin();
+            }
+            return;
+        }
+
         // A device that appears later (audio services started, a speaker plugged
         // in, an RDP session that now redirects audio) clears the complaint and
         // resumes the station that was asked for.

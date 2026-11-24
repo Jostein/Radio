@@ -26,6 +26,8 @@ pub struct Audio {
     ring: Arc<Ring>,
     volume: Arc<AtomicU32>,
     stopped: Arc<AtomicBool>,
+    /// Set by the stream's error callback when the device under it disappears.
+    failed: Arc<AtomicBool>,
     /// Total samples handed to the ring for the current playback. The watchdog
     /// watches this instead of the fill level: a consumer that runs ahead (ALSA's
     /// null device, or a device whose callback drains eagerly) keeps the buffer
@@ -150,6 +152,7 @@ impl Audio {
             ring: Arc::new(Ring::new((sample_rate as usize * channels as usize) / 2)),
             volume: Arc::new(AtomicU32::new(volume.clamp(0.0, 1.0).to_bits())),
             stopped: Arc::new(AtomicBool::new(false)),
+            failed: Arc::new(AtomicBool::new(false)),
             pushed: Arc::new(AtomicU64::new(0)),
             sample_rate: AtomicU32::new(sample_rate),
             channels: AtomicU16::new(channels),
@@ -197,6 +200,26 @@ impl Audio {
         true
     }
 
+    /// True when the device under a running stream went away: WASAPI invalidates
+    /// the client — an unplugged speaker, or a remote session reconnecting — and
+    /// the callbacks stop, while the stream object itself stays behind.
+    pub fn failed(&self) -> bool {
+        self.failed.load(Ordering::Relaxed)
+    }
+
+    /// Drops the dead stream and the cached device, asks the system for its
+    /// current default, and opens a stream on that. Without it the app keeps a
+    /// stream that will never make a sound and `active` keeps returning early.
+    pub fn reopen(&self) {
+        self.idle();
+        match self.output.lock() {
+            Ok(mut guard) => *guard = None,
+            Err(poisoned) => *poisoned.into_inner() = None,
+        }
+        self.failed.store(false, Ordering::Relaxed);
+        self.active();
+    }
+
     /// Opens the device and starts the callbacks, if they are not running.
     pub fn active(&self) {
         let mut guard = match self.stream.lock() {
@@ -213,6 +236,7 @@ impl Audio {
 
         let ring = self.ring.clone();
         let volume = self.volume.clone();
+        let failed = self.failed.clone();
         let opened = {
             let output = match self.output.lock() {
                 Ok(output) => output,
@@ -229,7 +253,10 @@ impl Audio {
                         let gain = f32::from_bits(volume.load(Ordering::Relaxed));
                         ring.drain(data, gain);
                     },
-                    |error| eprintln!("radio: audio output error: {error}"),
+                    move |error| {
+                        failed.store(true, Ordering::Relaxed);
+                        eprintln!("radio: audio output error: {error}");
+                    },
                     None,
                 )
                 .map_err(|error| error.to_string())
