@@ -7,6 +7,11 @@ name: Windows
 # It cannot prove the tray icon, the media flyout or the media keys: a runner has
 # no interactive user session, so there is no notification area and no SMTC to
 # attach to. That needs a machine someone is sitting at.
+#
+# The zip built at the end carries its own decoder: ffmpeg configured with only
+# the demuxers, decoders, protocols and single muxer this app uses. A stock
+# Windows ffmpeg is 40 to 100 MB; this one is a few, and with no GPL components
+# it stays LGPL (ffmpeg's licence text rides along in the zip).
 
 on:
   push:
@@ -22,6 +27,9 @@ on:
 
 permissions:
   contents: read
+
+env:
+  FFMPEG_VERSION: "8.0"
 
 jobs:
   build:
@@ -49,3 +57,61 @@ jobs:
         run: |
           $exe = Get-Item target\release\radio.exe
           "{0:N1} MB  radio.exe" -f ($exe.Length / 1MB)
+
+      # The component list mirrors what `spawn_ffmpeg` in audio.rs asks for:
+      # MP3, AAC, Ogg/Vorbis and Opus, HLS over http(s), TLS through Windows'
+      # own SChannel, and raw f32 PCM out. --enable-schannel has to be explicit,
+      # because --disable-autodetect turns the automatic TLS backends off.
+      # `pcm_f32le` is the muxer behind `-f f32le` in ffmpeg 8; `f32le` itself
+      # no longer matches a component and silently leaves the build without it.
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: false
+          install: >-
+            make
+            curl
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-nasm
+
+      - name: Build a trimmed ffmpeg
+        shell: msys2 {0}
+        run: |
+          set -e
+          cd "$(cygpath -u "$GITHUB_WORKSPACE")/Platforms"
+          curl -fsSL -o ffmpeg.tar.xz "https://ffmpeg.org/releases/ffmpeg-${FFMPEG_VERSION}.tar.xz"
+          tar xf ffmpeg.tar.xz
+          mkdir -p ffmpeg-build
+          cd ffmpeg-build
+          "../ffmpeg-${FFMPEG_VERSION}/configure" \
+            --disable-everything --disable-autodetect --disable-doc --disable-debug \
+            --disable-ffplay --disable-ffprobe --enable-ffmpeg \
+            --enable-schannel \
+            --enable-protocol=file,http,https,tcp,tls,crypto,pipe,hls \
+            --enable-demuxer=mp3,aac,ogg,hls,mpegts,mov,flac,wav \
+            --enable-decoder=mp3,aac,vorbis,opus,flac,pcm_s16le \
+            --enable-parser=aac,mpegaudio,vorbis,opus,flac \
+            --enable-muxer=pcm_f32le --enable-encoder=pcm_f32le \
+            --enable-filter=aresample \
+            --enable-static --disable-shared --extra-ldflags=-static
+          make -j"$(nproc)"
+          cp ffmpeg.exe ../
+          ../ffmpeg.exe -hide_banner -version | head -1
+        # msys2/setup-msys2 installs these into the MINGW64 toolchain; `make`
+        # and `curl` come from the MSYS side, which is where the build runs.
+
+      - name: Package the zip
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item target\release\radio.exe dist\
+          Copy-Item ffmpeg.exe dist\
+          Copy-Item "ffmpeg-$env:FFMPEG_VERSION\COPYING.LGPLv2.1" dist\ffmpeg-LICENSE.txt
+          "radio.exe {0:N1} MB, ffmpeg.exe {1:N1} MB" -f `
+            ((Get-Item dist\radio.exe).Length / 1MB), ((Get-Item dist\ffmpeg.exe).Length / 1MB)
+          Compress-Archive -Path dist\* -DestinationPath "$env:GITHUB_WORKSPACE\Radio-windows-x86_64.zip" -Force
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Radio-windows-x86_64
+          path: ${{ github.workspace }}/Radio-windows-x86_64.zip
+          if-no-files-found: error

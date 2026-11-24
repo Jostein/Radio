@@ -28,7 +28,9 @@ currently stops.
 >   `FIP Reggae — Reconnecting (4 of 6)…`. No sound was heard, and the media
 >   flyout, media keys, pause/resume and reconnect recovery were not exercised.
 >   The binary is console-subsystem, so it occupies the console it is launched
->   from; Windows puts a new tray icon in the overflow by default.
+>   from; Windows puts a new tray icon in the overflow by default. Playback there
+>   needs no install: the release zip carries a trimmed `ffmpeg.exe` beside
+>   `radio.exe`, and `spawn_ffmpeg` prefers that copy over `PATH`.
 > - Linux, headless (Xvfb, a private session bus, ALSA `null` output): the binary
 >   starts, loads libayatana-appindicator, decodes a live MP3 stream to 44.1 kHz
 >   PCM through cpal/ALSA at real time, and shows ICY track titles within about a
@@ -152,6 +154,8 @@ implementation.
 ## Build and run
 
 Needs Rust 1.75 or newer (`rustup`), plus an audio stack and `ffmpeg` on `PATH`.
+The Windows release zip is the exception: it carries its own `ffmpeg.exe`, so
+nothing but the zip is needed there.
 
 **Arch / Omarchy**
 
@@ -212,7 +216,7 @@ something else. On Hyprland the icon appears in whatever hosts a tray (waybar's
 
 ```powershell
 winget install Rustlang.Rustup     # offers to install the MSVC build tools
-winget install Gyan.FFmpeg         # skip if you already have an ffmpeg on PATH
+winget install Gyan.FFmpeg         # a source build; the release zip bundles one
 cd Platforms
 cargo run -p radio --release
 ```
@@ -294,6 +298,15 @@ Three things to watch for, because they are the parts most likely to need a fix:
   practical way to cover MP3, AAC, Ogg *and* HLS with one code path. It costs a
   child process; a native decoder for plain streams is the obvious follow-up.
   If ffmpeg is missing the app says so instead of failing silently.
+- **The Windows zip bundles that decoder** rather than asking users to install
+  one, and rather than downloading one at runtime: an unsigned app that fetches
+  an executable and runs it is the shape antivirus and application-control
+  policies are built to stop, and it needs a network round trip on first play.
+  Built with `--disable-everything` and only the demuxers, decoders, protocols
+  and the `pcm_f32le` muxer this app uses, it is a couple of megabytes instead
+  of the 40 to 100 MB of a stock Windows build, and with no GPL components it
+  stays LGPL, which is what the licence file in the zip is for. Linux still uses
+  the system ffmpeg: every distro package on the list already depends on it.
 - **No window toolkit** beyond what the tray needs; the app loop is a 25 Hz
   poll, which is what makes the same code work under GTK and under the Win32
   message pump.

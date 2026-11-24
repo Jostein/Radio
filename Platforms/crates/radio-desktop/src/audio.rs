@@ -10,9 +10,10 @@ use std::time::Duration;
 /// Plays whatever ffmpeg decodes into raw f32 PCM.
 ///
 /// Decoding is delegated to `ffmpeg` because it is the only practical way to
-/// cover MP3, AAC, Ogg and HLS with one command on both Linux and Windows. It
-/// has to be installed (`pacman -S ffmpeg` on Arch, `winget install ffmpeg` on
-/// Windows); a native decoder is the obvious follow-up for plain streams.
+/// cover MP3, AAC, Ogg and HLS with one command on both Linux and Windows. On
+/// Linux it is installed (`pacman -S ffmpeg` on Arch); the Windows release zip
+/// carries a trimmed `ffmpeg.exe` beside `radio.exe`, so playback there needs no
+/// install. A native decoder is the obvious follow-up for plain streams.
 pub struct Audio {
     /// The stream only exists while something is playing. Holding the device
     /// open costs a scheduling thread in the audio server for silence, and keeps
@@ -279,9 +280,28 @@ impl Audio {
     }
 }
 
+/// The decoder binary: a copy beside the app first, then `PATH`.
+///
+/// Windows searches a few more places than `PATH` on its own, but relying on
+/// that is what made the missing-decoder case confusing: the zip ships an
+/// `ffmpeg.exe` next to `radio.exe`, and naming it explicitly means the bundled
+/// copy is the one that plays. Nothing is bundled on Linux, and the Arch package
+/// leaves ffmpeg to the system, so both fall back to `PATH` as before.
+fn ffmpeg_command() -> Command {
+    let name = if cfg!(windows) { "ffmpeg.exe" } else { "ffmpeg" };
+    let beside_the_app = std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(|dir| dir.join(name)));
+
+    match beside_the_app {
+        Some(path) if path.is_file() => Command::new(path),
+        _ => Command::new(name),
+    }
+}
+
 /// Spawns ffmpeg decoding `url` to raw f32 PCM at the output device's rate.
 pub fn spawn_ffmpeg(url: &str, sample_rate: u32, channels: u16) -> Result<Child, String> {
-    let mut command = Command::new("ffmpeg");
+    let mut command = ffmpeg_command();
     command
         .args([
             "-hide_banner",
@@ -312,7 +332,8 @@ pub fn spawn_ffmpeg(url: &str, sample_rate: u32, channels: u16) -> Result<Child,
 
     command.spawn().map_err(|error| {
         if error.kind() == std::io::ErrorKind::NotFound {
-            "ffmpeg is required for playback but was not found on PATH.".to_string()
+            "ffmpeg is required for playback but was not found next to the app or on PATH."
+                .to_string()
         } else {
             format!("Playback could not start: {error}")
         }

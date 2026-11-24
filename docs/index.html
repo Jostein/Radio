@@ -301,10 +301,11 @@ cargo run -p radio --release</pre>
         </div>
         <div class="card">
           <h3>Windows</h3>
-          <p>Rust and ffmpeg from winget, plus the MSVC tools rustup offers.</p>
+          <p>Rust from winget plus the MSVC tools rustup offers. To build it
+          yourself you also need ffmpeg; the prebuilt zip already carries its own.</p>
           <pre><span class="c"># PowerShell</span>
 winget install Rustlang.Rustup
-winget install Gyan.FFmpeg
+winget install Gyan.FFmpeg <span class="c"># the zip bundles one</span>
 cd Platforms
 cargo run -p radio --release</pre>
         </div>
