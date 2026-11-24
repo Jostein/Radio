@@ -13,6 +13,10 @@ pub struct App {
     tray: TrayIcon,
     handles: Handles,
     media: Controls,
+    /// The Windows flyout a left click opens. `None` when the window could not be
+    /// created, in which case the menu is the only front end, as before.
+    #[cfg(target_os = "windows")]
+    panel: Option<crate::flyout::Panel>,
     last_header: String,
     last_track: String,
     last_toggle: String,
@@ -31,21 +35,39 @@ impl App {
         let player = Player::new(audio, volume);
 
         let built = menu::build(&store, &player);
-        let tray = tray_icon::TrayIconBuilder::new()
+        let builder = tray_icon::TrayIconBuilder::new()
             .with_menu(Box::new(built.menu))
             .with_tooltip("Radio")
-            .with_icon(icon::tray_icon()?)
+            .with_icon(icon::tray_icon()?);
+        // On Windows a left click opens the flyout and the right button opens
+        // this menu; the crate shows the menu on right click either way. The
+        // other platforms keep the menu on both, so they are left alone.
+        #[cfg(target_os = "windows")]
+        let builder = builder.with_menu_on_left_click(false);
+        let tray = builder
             .build()
             .map_err(|error| format!("The tray icon could not be created: {error}"))?;
 
         let saved_mtime = store.modified();
         let media = Controls::start(Snapshot::from_player(&player, store.volume));
+
+        // A panel that cannot be made must not keep the app from starting: the
+        // menu still does everything, so this is reported and walked past.
+        #[cfg(target_os = "windows")]
+        let panel = crate::flyout::Panel::new();
+        #[cfg(target_os = "windows")]
+        if panel.is_none() {
+            eprintln!("radio: the flyout panel is off; the tray menu still works");
+        }
+
         let mut app = App {
             store,
             player,
             tray,
             handles: built.handles,
             media,
+            #[cfg(target_os = "windows")]
+            panel,
             last_header: String::new(),
             last_track: String::new(),
             last_toggle: String::new(),
@@ -63,9 +85,14 @@ impl App {
     pub fn pump(&mut self) {
         self.handle_menu_events();
         self.handle_media();
+        #[cfg(target_os = "windows")]
+        self.handle_tray_clicks();
         self.player.pump();
         self.sync();
         self.watch_store_file();
+        // Last, so the panel is handed the state this turn produced.
+        #[cfg(target_os = "windows")]
+        self.handle_panel();
     }
 
     fn handle_menu_events(&mut self) {
@@ -143,6 +170,83 @@ impl App {
         let volume = (self.store.volume + delta).clamp(0.0, 1.0);
         self.store.set_volume(volume);
         self.player.set_volume(volume as f32);
+    }
+
+    /// A left click on the tray icon opens or closes the flyout. The menu stays on
+    /// the right button, where `tray-icon` shows it whatever we do here.
+    #[cfg(target_os = "windows")]
+    fn handle_tray_clicks(&mut self) {
+        use tray_icon::{MouseButton, MouseButtonState, TrayIconEvent};
+
+        while let Ok(event) = TrayIconEvent::receiver().try_recv() {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                rect,
+                ..
+            } = event
+            {
+                let anchor = crate::flyout::Anchor {
+                    x: rect.position.x as i32,
+                    y: rect.position.y as i32,
+                    width: rect.size.width as i32,
+                };
+                let content = self.panel_content();
+                if let Some(panel) = self.panel.as_mut() {
+                    panel.toggle(content, anchor);
+                }
+            }
+        }
+    }
+
+    /// Applies whatever the panel sent, then hands it the state that resulted.
+    #[cfg(target_os = "windows")]
+    fn handle_panel(&mut self) {
+        let actions = match self.panel.as_mut() {
+            Some(panel) => panel.take_actions(),
+            None => return,
+        };
+
+        for action in actions {
+            match action {
+                crate::flyout::Action::Play(id) => {
+                    if let Some(station) = self.store.station(&id).cloned() {
+                        self.player.play(station);
+                    }
+                }
+                crate::flyout::Action::Toggle => self.player.toggle(),
+                crate::flyout::Action::Volume(volume) => {
+                    self.store.set_volume(volume);
+                    self.player.set_volume(volume as f32);
+                }
+            }
+        }
+
+        let content = self.panel_content();
+        if let Some(panel) = self.panel.as_mut() {
+            if panel.is_open() {
+                panel.update(content);
+            }
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    fn panel_content(&self) -> crate::flyout::Content {
+        crate::flyout::Content {
+            header: menu::header_text(&self.player),
+            detail: menu::track_text(&self.player),
+            volume: self.store.volume,
+            rows: self
+                .store
+                .stations
+                .iter()
+                .map(|station| crate::flyout::Row {
+                    id: station.id.clone(),
+                    title: station.title.clone(),
+                })
+                .collect(),
+            current: self.player.current.as_ref().map(|station| station.id.clone()),
+        }
     }
 
     fn open_track_search(&self) {

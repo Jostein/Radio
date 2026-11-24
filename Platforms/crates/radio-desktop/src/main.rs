@@ -1,6 +1,8 @@
 mod app;
 mod audio;
 mod dialog;
+#[cfg(target_os = "windows")]
+mod flyout;
 mod icon;
 mod media;
 mod menu;
