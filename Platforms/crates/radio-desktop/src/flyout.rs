@@ -134,6 +134,9 @@ struct State {
     /// When the panel last hid itself, so the click that closed it through the
     /// tray icon does not immediately reopen it.
     closed_at: Option<Instant>,
+    /// Set by `demo`: the panel then ignores focus changes, so a build can
+    /// measure it without a mouse ever touching it.
+    sticky: bool,
 }
 
 /// The panel window. `None` from `new` means the app keeps only the native menu.
@@ -253,6 +256,7 @@ impl Panel {
                 theme: Theme::detect(),
                 visible: false,
                 closed_at: None,
+                sticky: false,
             });
             let pointer = Box::into_raw(state);
             let state = &mut *pointer;
@@ -295,6 +299,15 @@ impl Panel {
 
     pub fn is_open(&self) -> bool {
         self.state().visible
+    }
+
+    /// Opens the panel at startup and keeps it open. Only the prototype's
+    /// measurement step uses this (through `RADIO_FLYOUT_DEMO`), because there
+    /// is no mouse in a build worker to click the tray icon with.
+    pub fn demo(&mut self, content: Content) {
+        let state = self.state();
+        state.sticky = true;
+        unsafe { show(state, content, default_anchor()) };
     }
 
     /// Keeps an open panel in step with the player. Cheap: a changed panel is
@@ -374,6 +387,23 @@ unsafe fn hide(state: &mut State) {
     if state.dragging {
         state.dragging = false;
         ReleaseCapture();
+    }
+}
+
+/// The bottom-right corner of the work area: where the panel goes when there is
+/// no tray icon rectangle to line up with.
+unsafe fn default_anchor() -> Anchor {
+    let mut area: RECT = std::mem::zeroed();
+    SystemParametersInfoW(
+        SPI_GETWORKAREA,
+        0,
+        &mut area as *mut RECT as *mut core::ffi::c_void,
+        0,
+    );
+    Anchor {
+        x: area.right - 24,
+        y: area.bottom,
+        width: 24,
     }
 }
 
@@ -758,7 +788,7 @@ unsafe extern "system" fn window_proc(
             0
         }
         WM_ACTIVATE => {
-            if (wparam & 0xffff) as u32 == WA_INACTIVE {
+            if (wparam & 0xffff) as u32 == WA_INACTIVE && !state.sticky {
                 hide(state);
             }
             0

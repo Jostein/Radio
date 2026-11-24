@@ -78,6 +78,17 @@ impl App {
             last_file_check: Instant::now(),
         };
         app.sync();
+
+        // The prototype's measurement step has no mouse to click the tray icon
+        // with, so it asks for the panel to be open from the start.
+        #[cfg(target_os = "windows")]
+        if std::env::var_os("RADIO_FLYOUT_DEMO").is_some() {
+            let content = app.panel_content();
+            if let Some(panel) = app.panel.as_mut() {
+                panel.demo(content);
+            }
+        }
+
         Ok(app)
     }
 
