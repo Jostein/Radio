@@ -8,32 +8,36 @@ API=https://ci.appveyor.com/api
 PROJECT=Jostein/radio
 AUTH="Authorization: Bearer $(tr -d '\r\n' < .appveyor-token)"
 
-read -r build version age <<<"$(curl -sf -H "$AUTH" \
+read -r build version <<<"$(curl -sf -H "$AUTH" \
   "$API/projects/$PROJECT/history?recordsNumber=10" |
-  python3 -c 'import json,sys,re,datetime
+  python3 -c 'import json,sys
 b=[x for x in json.load(sys.stdin).get("builds",[]) if x["status"]=="running"]
-if not b:
-    print("", "", ""); raise SystemExit
-x=b[0]
-c=re.sub(r"\.(\d+)", lambda m: "."+(m.group(1)+"000000")[:6], x["created"])
-t=datetime.datetime.fromisoformat(c.replace("Z","+00:00"))
-n=datetime.datetime.now(datetime.timezone.utc)
-print(x["buildId"], x["version"], int((n-t).total_seconds()//60))')"
+print(b[0]["buildId"], b[0]["version"]) if b else print("", "")')"
 
 if [ -z "${build:-}" ]; then
   echo "No running AppVeyor build: the worker is gone. Ask me to start a new one."
   exit 1
 fi
 
+# The job's own start, not the build's creation: a build can sit in the queue
+# for an hour before a worker takes it, and that hour says nothing about
+# whether the desktop is still there.
+read -r job age <<<"$(curl -sf -H "$AUTH" "$API/projects/$PROJECT/build/$version" |
+  python3 -c 'import json,sys,re,datetime
+b=json.load(sys.stdin)["build"]
+j=b["jobs"][0]
+stamp=(j.get("started") or b.get("created")).split("+")[0]
+c=re.sub(r"\.(\d+)", lambda m: "."+(m.group(1)+"000000")[:6], stamp)
+t=datetime.datetime.fromisoformat(c)
+n=datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+print(j["jobId"], int((n-t).total_seconds()//60))')"
+
 # A job is killed at 60 minutes, but AppVeyor keeps reporting it as running.
 if [ "${age:-0}" -ge 55 ]; then
-  echo "Build $version is ${age} min old and its worker has expired; nothing to connect to."
+  echo "Build $version has been running ${age} min; its worker expires at 60 and is gone."
   echo "Ask me for a new build (it takes ~14 min to reach the pause)."
   exit 1
 fi
-
-job=$(curl -sf -H "$AUTH" "$API/projects/$PROJECT/build/$version" |
-  python3 -c 'import json,sys; print(json.load(sys.stdin)["build"]["jobs"][0]["jobId"])')
 
 details=$(curl -sf -H "$AUTH" "$API/buildjobs/$job/log" | tr -d '\r' |
   awk '/Remote Desktop connection details/{f=1} f')
