@@ -73,4 +73,14 @@ on_finish:
       } else {
         $endpoints | Format-Table FriendlyName, Status -AutoSize | Out-String | Write-Host
       }
+  # Start the app before pausing. Typing into the session over RDP is unreliable
+  # (the worker's keymap mangles punctuation, and keystrokes land wherever focus
+  # is on the client), so the tray icon has to be there on arrival: log in and
+  # it is already in the notification area.
+  - ps: |
+      $exe = Resolve-Path 'Platforms\target\release\radio.exe'
+      Start-Process -FilePath $exe -WorkingDirectory (Split-Path $exe)
+      Start-Sleep -Seconds 4
+      Get-Process radio -ErrorAction SilentlyContinue |
+        Format-Table Id, ProcessName, MainWindowTitle -AutoSize | Out-String | Write-Host
   - ps: $blockRdp = $true; iex ((new-object net.webclient).DownloadString('https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-rdp.ps1'))
