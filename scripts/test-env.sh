@@ -65,18 +65,30 @@ if [ "${1:-}" != "--new" ]; then
   echo "No worker to attach to; starting a build of $BRANCH."
 fi
 
-read -r version build <<<"$(curl -sf -X POST -H "$AUTH" -H 'Content-Type: application/json' \
-  -d "{\"accountName\":\"Jostein\",\"projectSlug\":\"radio\",\"branch\":\"$BRANCH\"}" \
-  "$API/builds" | python3 -c 'import json,sys
+# A push, or an earlier run of this script, may already have a build waiting
+# for the worker. Starting another would only queue behind it, so wait for the
+# one that is next in line instead.
+read -r version build <<<"$(curl -sf -H "$AUTH" "$API/projects/$PROJECT/history?recordsNumber=20" |
+  python3 -c 'import json,sys
+b=[x for x in json.load(sys.stdin)["builds"] if x["status"] in ("queued", "starting")]
+print(min(b, key=lambda x: int(x["version"]))["version"], min(b, key=lambda x: int(x["version"]))["buildId"]) if b else print("", "")')"
+
+if [ -n "${version:-}" ]; then
+  echo "Build $version is already waiting for the worker."
+else
+  read -r version build <<<"$(curl -sf -X POST -H "$AUTH" -H 'Content-Type: application/json' \
+    -d "{\"accountName\":\"Jostein\",\"projectSlug\":\"radio\",\"branch\":\"$BRANCH\"}" \
+    "$API/builds" | python3 -c 'import json,sys
 r=json.load(sys.stdin)
 b=r.get("build", r)
 print(b["version"], b["buildId"])')"
 
-if [ -z "${version:-}" ]; then
-  echo "AppVeyor did not accept the build request."
-  exit 1
+  if [ -z "${version:-}" ]; then
+    echo "AppVeyor did not accept the build request."
+    exit 1
+  fi
+  echo "Build $version queued: https://ci.appveyor.com/project/Jostein/radio/builds/$build"
 fi
-echo "Build $version queued: https://ci.appveyor.com/project/Jostein/radio/builds/$build"
 
 # Waiting is mostly queue: the account has one worker, so this build starts only
 # after every earlier paused one has expired. Status is printed when it changes,
