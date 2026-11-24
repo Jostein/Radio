@@ -83,6 +83,32 @@ on_finish:
       Start-Sleep -Seconds 4
       Get-Process radio -ErrorAction SilentlyContinue |
         Format-Table Id, ProcessName, MainWindowTitle -AutoSize | Out-String | Write-Host
+  # Pixels out of the session: the Remote Desktop window cannot be captured on
+  # macOS, and the worker is the only place that can see the desktop it shows.
+  # Every twenty seconds it saves the screen and uploads it as a build artifact,
+  # which scripts/vm-shot.sh fetches while the pause keeps the machine open.
+  - ps: |
+      Start-Job -ScriptBlock {
+        Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+        $api = $env:APPVEYOR_API_URL
+        $job = $env:APPVEYOR_JOB_ID
+        $n = 0
+        while ($true) {
+          $n++
+          $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+          $bmp = New-Object System.Drawing.Bitmap $bounds.Width, $bounds.Height
+          $graphics = [System.Drawing.Graphics]::FromImage($bmp)
+          $graphics.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
+          $file = Join-Path $env:TEMP ("live{0:D4}.png" -f $n)
+          $bmp.Save($file, [System.Drawing.Imaging.ImageFormat]::Png)
+          $graphics.Dispose()
+          $bmp.Dispose()
+          $client = New-Object System.Net.WebClient
+          try { $client.UploadFile("$api/api/buildjobs/$job/artifacts", $file) } catch { }
+          Start-Sleep -Seconds 20
+        }
+      } | Out-Null
+      'Screen captures every twenty seconds until the pause ends'
   # The app's own build slot is the account's only one, so a paused worker that
   # nobody connects to blocks every later build for the full hour. Expire the
   # pause instead: a background job deletes the lock file after RADIO_RDP_MINUTES
