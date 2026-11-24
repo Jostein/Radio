@@ -35,49 +35,19 @@ build_script:
       $exe = Get-Item target\release\radio.exe
       "{0:N1} MB  radio.exe" -f ($exe.Length / 1MB)
 
-  # The flyout prototype's numbers, taken in the worker's own session: footprint
-  # with the panel closed and with it forced open (RADIO_FLYOUT_DEMO, since no
-  # mouse is going to click the tray icon), then the same for main without the
-  # panel, built in a worktree beside the checkout. One line per number, so a
-  # log search for MEASURE reads the whole comparison.
+  # Playback needs ffmpeg beside radio.exe (the release zip ships one; a fresh
+  # worker has none, which is why the panel said ffmpeg was required). Grab the
+  # essentials build and keep only the binary the app looks for.
   - ps: |
-      function Measure-Radio {
-        param([string]$Label, [string]$Exe, [hashtable]$Settings)
+      $ErrorActionPreference = 'Stop'
+      $zip = Join-Path $env:TEMP 'ffmpeg.zip'
+      $out = Join-Path $env:TEMP 'ffmpeg'
+      Invoke-WebRequest https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip -OutFile $zip
+      Expand-Archive $zip -DestinationPath $out -Force
+      $ffmpeg = Get-ChildItem $out -Recurse -Filter ffmpeg.exe | Select-Object -First 1
+      Copy-Item $ffmpeg.FullName .\target\release\ffmpeg.exe
+      "{0:N1} MB  ffmpeg.exe" -f ((Get-Item .\target\release\ffmpeg.exe).Length / 1MB)
 
-        foreach ($key in $Settings.Keys) { Set-Item -Path "env:$key" -Value $Settings[$key] }
-        $process = Start-Process -FilePath $Exe -PassThru
-        Start-Sleep -Seconds 20
-
-        $app = Get-Process -Id $process.Id -ErrorAction SilentlyContinue
-        if (-not $app) {
-          "MEASURE $Label exited before it could be measured"
-        } else {
-          "MEASURE $Label working=$($app.WorkingSet64) private=$($app.PrivateMemorySize64) handles=$($app.HandleCount)"
-          $started = $app.TotalProcessorTime
-          Start-Sleep -Seconds 30
-          $app = Get-Process -Id $process.Id -ErrorAction SilentlyContinue
-          if ($app) {
-            $used = ($app.TotalProcessorTime - $started).TotalSeconds
-            "MEASURE $Label cpu=$([math]::Round($used / 30 * 100, 2))"
-            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
-          }
-        }
-
-        foreach ($key in $Settings.Keys) { Remove-Item -Path "env:$key" -ErrorAction SilentlyContinue }
-        Start-Sleep -Seconds 2
-      }
-
-      $flyout = (Resolve-Path .\target\release\radio.exe).Path
-      Measure-Radio -Label "prototype-closed" -Exe $flyout -Settings @{}
-      Measure-Radio -Label "prototype-open" -Exe $flyout -Settings @{ RADIO_FLYOUT_DEMO = "1" }
-
-      git fetch --depth 1 origin main
-      git worktree add ..\base origin/main --force | Out-Null
-      Push-Location ..\base\Platforms
-      cargo build --release --locked -p radio | Out-Null
-      $without = (Resolve-Path .\target\release\radio.exe).Path
-      Measure-Radio -Label "main-closed" -Exe $without -Settings @{}
-      Pop-Location
 
 # Keep the worker alive after the build so it can be driven over RDP. The helper
 # prints the connection details and waits for the lock file to be removed.

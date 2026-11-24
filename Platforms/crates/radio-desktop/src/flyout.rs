@@ -21,10 +21,10 @@ use windows_sys::Win32::Graphics::Dwm::{
 };
 use windows_sys::Win32::Graphics::Gdi::{
     BeginPaint, BitBlt, CreateCompatibleBitmap, CreateCompatibleDC, CreateFontW, CreateSolidBrush,
-    DeleteDC, DeleteObject, DrawTextW, Ellipse, EndPaint, FillRect, InvalidateRect, RoundRect,
-    SelectObject, SetBkColor, SetBkMode, SetTextColor, CLEARTYPE_QUALITY, DEFAULT_CHARSET, DT_CENTER,
-    DT_END_ELLIPSIS, DT_LEFT, DT_NOPREFIX, DT_RIGHT, DT_SINGLELINE, DT_VCENTER, HDC, HFONT,
-    PAINTSTRUCT, SRCCOPY, TRANSPARENT,
+    DeleteDC, DeleteObject, DrawTextW, Ellipse, EndPaint, FillRect, GetStockObject, InvalidateRect,
+    RoundRect, SelectObject, SetBkColor, SetBkMode, SetTextColor, CLEARTYPE_QUALITY, DEFAULT_CHARSET,
+    DT_CENTER, DT_END_ELLIPSIS, DT_LEFT, DT_NOPREFIX, DT_RIGHT, DT_SINGLELINE, DT_VCENTER, HDC, HFONT,
+    NULL_PEN, PAINTSTRUCT, SRCCOPY, TRANSPARENT,
 };
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows_sys::Win32::System::Registry::{RegGetValueW, HKEY_CURRENT_USER, RRF_RT_REG_DWORD};
@@ -61,8 +61,11 @@ pub struct Row {
 /// Everything the panel draws, handed over by the app on each change.
 #[derive(Clone, PartialEq, Debug)]
 pub struct Content {
-    /// Station and state, the line the native menu shows at the top.
-    pub header: String,
+    /// The station's name: the panel's first line.
+    pub title: String,
+    /// Playing, paused, or why it cannot play: the second line, which can be
+    /// long enough that it needs one of its own.
+    pub status: String,
     /// The track, when the stream publishes one.
     pub detail: String,
     pub volume: f64,
@@ -147,7 +150,9 @@ pub struct Panel {
 struct Layout {
     width: i32,
     height: i32,
-    header: RECT,
+    title: RECT,
+    status: RECT,
+    detail: RECT,
     volume_label: RECT,
     slider: RECT,
     field: RECT,
@@ -239,7 +244,8 @@ impl Panel {
                 edit,
                 edit_proc: 0,
                 content: Content {
-                    header: String::new(),
+                    title: String::new(),
+                    status: String::new(),
                     detail: String::new(),
                     volume: 1.0,
                     rows: Vec::new(),
@@ -435,13 +441,34 @@ fn layout_for(state: &State) -> Layout {
     let visible = state.filtered().len().min(VISIBLE_ROWS);
     let mut y = PAD;
 
-    let header = RECT {
+    // The name on its own line and the state beneath it, so a long status such
+    // as the missing-ffmpeg message reads instead of being cut off in bold.
+    let title_height = if state.content.title.is_empty() { 0 } else { 21 };
+    let title = RECT {
         left: PAD,
         top: y,
         right: WIDTH - PAD,
-        bottom: y + 36,
+        bottom: y + title_height,
     };
-    y += 36;
+    y += title_height;
+
+    let status_height = if state.content.status.is_empty() { 0 } else { 17 };
+    let status = RECT {
+        left: PAD,
+        top: y,
+        right: WIDTH - PAD,
+        bottom: y + 15,
+    };
+    y += status_height;
+
+    let detail_height = if state.content.detail.is_empty() { 0 } else { 17 };
+    let detail = RECT {
+        left: PAD,
+        top: y,
+        right: WIDTH - PAD,
+        bottom: y + 15,
+    };
+    y += detail_height + 4;
 
     let volume_label = RECT {
         left: PAD,
@@ -473,7 +500,9 @@ fn layout_for(state: &State) -> Layout {
     Layout {
         width: WIDTH,
         height: y + PAD,
-        header,
+        title,
+        status,
+        detail,
         volume_label,
         slider,
         field,
@@ -520,24 +549,26 @@ unsafe fn paint(state: &State, hdc: HDC) {
         memory,
         state.font_strong,
         theme.text,
-        layout.header,
-        &state.content.header,
+        layout.title,
+        &state.content.title,
         DT_LEFT,
     );
-    if !state.content.detail.is_empty() {
-        let detail = RECT {
-            top: layout.header.top + 20,
-            ..layout.header
-        };
-        draw_text(
-            memory,
-            state.font_small,
-            theme.dim,
-            detail,
-            &state.content.detail,
-            DT_LEFT,
-        );
-    }
+    draw_text(
+        memory,
+        state.font_small,
+        theme.dim,
+        layout.status,
+        &state.content.status,
+        DT_LEFT,
+    );
+    draw_text(
+        memory,
+        state.font_small,
+        theme.dim,
+        layout.detail,
+        &state.content.detail,
+        DT_LEFT,
+    );
 
     draw_text(
         memory,
@@ -689,6 +720,10 @@ unsafe fn fill(hdc: HDC, rect: RECT, color: u32) {
 unsafe fn rounded(hdc: HDC, rect: RECT, radius: i32, color: u32) {
     let brush = CreateSolidBrush(color);
     let previous = SelectObject(hdc, brush);
+    // RoundRect and Ellipse draw their edge with the current pen, and the stock
+    // default is one black pixel: without the null pen every soft shape here —
+    // the field, the hover row, the marker, the thumb — gains a hard black rim.
+    let pen = SelectObject(hdc, GetStockObject(NULL_PEN));
     RoundRect(
         hdc,
         rect.left,
@@ -698,6 +733,7 @@ unsafe fn rounded(hdc: HDC, rect: RECT, radius: i32, color: u32) {
         radius * 2,
         radius * 2,
     );
+    SelectObject(hdc, pen);
     SelectObject(hdc, previous);
     DeleteObject(brush);
 }
@@ -721,6 +757,7 @@ unsafe fn outline(hdc: HDC, rect: RECT, radius: i32, border: u32, inside: u32) {
 unsafe fn disc(hdc: HDC, center_x: i32, center_y: i32, radius: i32, color: u32) {
     let brush = CreateSolidBrush(color);
     let previous = SelectObject(hdc, brush);
+    let pen = SelectObject(hdc, GetStockObject(NULL_PEN));
     Ellipse(
         hdc,
         center_x - radius,
@@ -728,6 +765,7 @@ unsafe fn disc(hdc: HDC, center_x: i32, center_y: i32, radius: i32, color: u32) 
         center_x + radius,
         center_y + radius,
     );
+    SelectObject(hdc, pen);
     SelectObject(hdc, previous);
     DeleteObject(brush);
 }

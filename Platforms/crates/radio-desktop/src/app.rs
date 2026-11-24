@@ -244,7 +244,13 @@ impl App {
     #[cfg(target_os = "windows")]
     fn panel_content(&self) -> crate::flyout::Content {
         crate::flyout::Content {
-            header: menu::header_text(&self.player),
+            title: self
+                .player
+                .current
+                .as_ref()
+                .map(|station| station.title.clone())
+                .unwrap_or_default(),
+            status: self.player.state.description(),
             detail: menu::track_text(&self.player),
             volume: self.store.volume,
             rows: self
