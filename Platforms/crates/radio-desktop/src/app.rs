@@ -155,14 +155,21 @@ impl App {
                 menu::VOLUME_DOWN => self.change_volume(-0.1),
                 menu::YOUTUBE => self.open_track_search(),
                 menu::ADD_STATION => {
-                    if let Some(station) = crate::dialog::add_station() {
+                    let answer = crate::dialog::add_station();
+                    // A dialog owns this thread while it is open, so the next
+                    // turn can arrive minutes later. That is not a wake, and
+                    // must not restart what is playing.
+                    self.last_tick = SystemTime::now();
+                    if let Some(station) = answer {
                         self.store.add(station);
                         self.rebuild();
                     }
                 }
                 #[cfg(target_os = "windows")]
                 menu::FIND_STATIONS => {
-                    if let Some(station) = crate::find::find_station() {
+                    let answer = crate::find::find_station();
+                    self.last_tick = SystemTime::now();
+                    if let Some(station) = answer {
                         self.store.add(station);
                         self.rebuild();
                     }
