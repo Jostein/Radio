@@ -7,3 +7,4 @@ NOTES.local.md
 .build-x86/
 .appveyor-token
 .rdp/
+dist/

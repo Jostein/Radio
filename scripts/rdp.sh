@@ -6,6 +6,10 @@ cd "$(dirname "$0")/.."
 
 API=https://ci.appveyor.com/api
 PROJECT=Jostein/radio
+# Must match RADIO_RDP_MINUTES in appveyor.yml, which expires the pause on its
+# own; attaching to a worker after that means connecting into a build that has
+# already carried on and been reclaimed.
+PAUSE_MINUTES=${RADIO_RDP_MINUTES:-20}
 AUTH="Authorization: Bearer $(tr -d '\r\n' < .appveyor-token)"
 
 read -r build version <<<"$(curl -sf -H "$AUTH" \
@@ -39,8 +43,8 @@ if [ "${age:-0}" -ge 55 ]; then
   exit 1
 fi
 
-details=$(curl -sf -H "$AUTH" "$API/buildjobs/$job/log" | tr -d '\r' |
-  awk '/Remote Desktop connection details/{f=1} f')
+log=$(curl -sf -H "$AUTH" "$API/buildjobs/$job/log" | tr -d '\r')
+details=$(printf '%s\n' "$log" | awk '/Remote Desktop connection details/{f=1} f')
 
 field() { printf '%s\n' "$details" | awk -v k="$1" 'index($0,k){sub(/^.*: /,""); print; exit}'; }
 server=$(field 'Server:')
@@ -50,6 +54,22 @@ pass=$(field 'Password:')
 if [ -z "$server" ] || [ -z "$pass" ]; then
   echo "Build $version has not reached the RDP pause yet; try again in a minute."
   exit 1
+fi
+
+# The log stamps the pause with the job's own clock (hours since the job
+# started), so the pause age is the job age minus that stamp. A worker whose
+# pause has expired is still reported as running for a while; connecting to it
+# just hangs.
+paused=$(printf '%s\n' "$log" | grep -o '^\[[0-9][0-9]:[0-9][0-9]:[0-9][0-9]\] Build paused' |
+  tail -1 | cut -d']' -f1 | tr -d '[' || true)
+if [ -n "$paused" ]; then
+  paused_min=$(printf '%s\n' "$paused" | awk -F: '{print $1 * 60 + $2}')
+  pause_age=$((age - paused_min))
+  if [ "$pause_age" -ge $((PAUSE_MINUTES - 2)) ]; then
+    echo "Build $version paused ${pause_age} min ago; the pause expires after $PAUSE_MINUTES and the desktop has gone."
+    echo "Ask me to start a new one."
+    exit 1
+  fi
 fi
 
 mkdir -p .rdp

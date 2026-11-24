@@ -232,6 +232,23 @@ interactive session for a notification area to live in.
 The icon appears in the notification area. Windows hides new tray icons behind
 the overflow chevron until you drag it out.
 
+**Testing without a Windows machine**
+
+`scripts/test-env.sh`, from the repository root, brings up a throwaway Windows
+desktop to click the tray app on. It attaches to a paused AppVeyor worker when
+one is alive, and otherwise starts a build of `flyout-prototype` and waits for
+the Remote Desktop pause. The build opens `radio.exe` before pausing, so the
+tray icon is already in the notification area when the session appears; the
+`.rdp` file plays sound on this computer, so what the app plays comes out of the
+Mac. The pause expires by itself after twenty minutes, so no worker is left
+holding the account.
+
+It reads `.appveyor-token` at the repository root. The account has one worker, so
+a fresh build starts only once earlier paused ones have expired: the script
+reports the queue as it waits, and gives up after fifty minutes. If the RDP
+client shows no window, quit Windows App completely and run it again — a client
+whose session died will not open a new window until it is restarted.
+
 ## Behaviour checklist for the first run
 
 In the order worth testing, because each later item depends on the earlier ones.
