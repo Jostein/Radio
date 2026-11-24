@@ -85,11 +85,16 @@ impl App {
         // a screen is looked at through that file, never through Remote Desktop.
         #[cfg(target_os = "windows")]
         if std::env::var_os("RADIO_FLYOUT_DEMO").is_some() {
-            let content = app.panel_content();
+            let snapshot = std::env::var_os("RADIO_FLYOUT_SNAPSHOT");
+            let content = if snapshot.is_some() {
+                app.preview_content()
+            } else {
+                app.panel_content()
+            };
             if let Some(panel) = app.panel.as_mut() {
                 panel.demo(content);
             }
-            if let Some(path) = std::env::var_os("RADIO_FLYOUT_SNAPSHOT") {
+            if let Some(path) = snapshot {
                 let path = std::path::PathBuf::from(path);
                 match app.panel.as_ref().map(|panel| panel.snapshot(&path)) {
                     Some(Ok(())) => eprintln!("radio: drew the panel into {}", path.display()),
@@ -277,6 +282,22 @@ impl App {
                 .collect(),
             current: self.player.current.as_ref().map(|station| station.id.clone()),
         }
+    }
+
+    /// What a snapshot draws. A build machine has no audio device and nothing
+    /// ever starts playing on it, so the live content is one grey line and an
+    /// empty list; this marks the store's first station as playing instead, so
+    /// the picture is the panel a listener sees.
+    #[cfg(target_os = "windows")]
+    fn preview_content(&self) -> crate::flyout::Content {
+        let mut content = self.panel_content();
+        let Some(first) = self.store.stations.first() else {
+            return content;
+        };
+        content.title = first.title.clone();
+        content.status = crate::player::State::Playing.description();
+        content.current = Some(first.id.clone());
+        content
     }
 
     fn open_track_search(&self) {
