@@ -48,20 +48,6 @@ build_script:
       Copy-Item $ffmpeg.FullName .\target\release\ffmpeg.exe
       "{0:N1} MB  ffmpeg.exe" -f ((Get-Item .\target\release\ffmpeg.exe).Length / 1MB)
 
-  # The panel's pixels with no desktop involved: RADIO_FLYOUT_SNAPSHOT makes the
-  # same paint fill an off-screen bitmap and quit, and the artifact carries it
-  # out. A worker without a screen is looked at through this file, so a build no
-  # longer has to be paused for Remote Desktop to see the flyout.
-  - ps: |
-      $ErrorActionPreference = 'Stop'
-      $env:RADIO_FLYOUT_DEMO = '1'
-      $env:RADIO_FLYOUT_SNAPSHOT = (Join-Path (Get-Location) 'panel.bmp')
-      $run = Start-Process .\target\release\radio.exe -Wait -PassThru
-      "radio.exe exit $($run.ExitCode)"
-      if (-not (Test-Path $env:RADIO_FLYOUT_SNAPSHOT)) { throw 'radio.exe drew no panel bitmap' }
-      "{0:N0} B  panel.bmp" -f (Get-Item $env:RADIO_FLYOUT_SNAPSHOT).Length
-      Push-AppveyorArtifact $env:RADIO_FLYOUT_SNAPSHOT -FileName panel.bmp
-
 
 # Keep the worker alive after the build so it can be driven over RDP. The helper
 # prints the connection details and waits for the lock file to be removed.
