@@ -79,9 +79,13 @@ full address:s:$server
 username:s:$user
 prompt for credentials:i:0
 authentication level:i:0
-screen mode id:i:2
+screen mode id:i:1
 use multimon:i:0
+desktopwidth:i:1440
+desktopheight:i:900
+smart sizing:i:1
 redirectclipboard:i:1
+drivestoredirect:s:*
 audiomode:i:0
 EOF
 

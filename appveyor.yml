@@ -78,7 +78,7 @@ on_finish:
   # is on the client), so the tray icon has to be there on arrival: log in and
   # it is already in the notification area.
   - ps: |
-      $exe = Resolve-Path 'Platforms\target\release\radio.exe'
+      $exe = Resolve-Path 'target\release\radio.exe'
       Start-Process -FilePath $exe -WorkingDirectory (Split-Path $exe)
       Start-Sleep -Seconds 4
       Get-Process radio -ErrorAction SilentlyContinue |
