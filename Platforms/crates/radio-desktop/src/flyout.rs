@@ -20,11 +20,12 @@ use windows_sys::Win32::Graphics::Dwm::{
     DWMWCP_ROUND,
 };
 use windows_sys::Win32::Graphics::Gdi::{
-    BeginPaint, BitBlt, CreateCompatibleBitmap, CreateCompatibleDC, CreateFontW, CreateSolidBrush,
-    DeleteDC, DeleteObject, DrawTextW, Ellipse, EndPaint, FillRect, GetStockObject, InvalidateRect,
-    RoundRect, SelectObject, SetBkColor, SetBkMode, SetTextColor, CLEARTYPE_QUALITY, DEFAULT_CHARSET,
-    DT_CENTER, DT_END_ELLIPSIS, DT_LEFT, DT_NOPREFIX, DT_RIGHT, DT_SINGLELINE, DT_VCENTER, HDC, HFONT,
-    NULL_PEN, PAINTSTRUCT, SRCCOPY, TRANSPARENT,
+    BeginPaint, BitBlt, CreateCompatibleBitmap, CreateCompatibleDC, CreateDIBSection, CreateFontW,
+    CreateSolidBrush, DeleteDC, DeleteObject, DrawTextW, Ellipse, EndPaint, FillRect, GdiFlush,
+    GetDC, GetStockObject, InvalidateRect, ReleaseDC, RoundRect, SelectObject, SetBkColor, SetBkMode,
+    SetTextColor, BITMAPINFO, BITMAPINFOHEADER, BI_RGB, CLEARTYPE_QUALITY, DEFAULT_CHARSET,
+    DIB_RGB_COLORS, DT_CENTER, DT_END_ELLIPSIS, DT_LEFT, DT_NOPREFIX, DT_RIGHT, DT_SINGLELINE,
+    DT_VCENTER, HDC, HFONT, NULL_PEN, PAINTSTRUCT, SRCCOPY, TRANSPARENT,
 };
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows_sys::Win32::System::Registry::{RegGetValueW, HKEY_CURRENT_USER, RRF_RT_REG_DWORD};
@@ -314,6 +315,65 @@ impl Panel {
         let state = self.state();
         state.sticky = true;
         unsafe { show(state, content, default_anchor()) };
+    }
+
+    /// Draws the panel into a bitmap file instead of onto the screen.
+    ///
+    /// The prototype's worker has no interactive desktop to screenshot, so this
+    /// is how the drawing gets looked at: `paint` blitted into an off-screen DIB
+    /// rather than into the window, then written as a 32-bit BMP. The next turn
+    /// must not happen, so the caller exits afterwards.
+    pub fn snapshot(&self, path: &std::path::Path) -> std::io::Result<()> {
+        let state = self.state();
+        unsafe {
+            let mut client: RECT = std::mem::zeroed();
+            GetClientRect(state.hwnd, &mut client);
+            let (width, height) = (client.right, client.bottom);
+            if width <= 0 || height <= 0 {
+                return Err(std::io::Error::other("the panel has no size yet"));
+            }
+
+            let screen = GetDC(std::ptr::null_mut());
+            let mut info: BITMAPINFO = std::mem::zeroed();
+            info.bmiHeader.biSize = std::mem::size_of::<BITMAPINFOHEADER>() as u32;
+            info.bmiHeader.biWidth = width;
+            info.bmiHeader.biHeight = height;
+            info.bmiHeader.biPlanes = 1;
+            info.bmiHeader.biBitCount = 32;
+            info.bmiHeader.biCompression = BI_RGB;
+
+            let mut bits: *mut core::ffi::c_void = std::ptr::null_mut();
+            let dib = CreateDIBSection(
+                screen,
+                &info,
+                DIB_RGB_COLORS,
+                &mut bits,
+                std::ptr::null_mut(),
+                0,
+            );
+            if dib.is_null() || bits.is_null() {
+                let error = std::io::Error::last_os_error();
+                ReleaseDC(std::ptr::null_mut(), screen);
+                return Err(error);
+            }
+
+            let memory = CreateCompatibleDC(screen);
+            let previous = SelectObject(memory, dib);
+            paint(state, memory);
+            GdiFlush();
+
+            // BI_RGB rows are bottom-up BGRA, which is what the DIB already
+            // holds, so the file is the header followed by these bytes.
+            let image = width as usize * 4 * height as usize;
+            let pixels = std::slice::from_raw_parts(bits as *const u8, image).to_vec();
+
+            SelectObject(memory, previous);
+            DeleteObject(dib);
+            DeleteDC(memory);
+            ReleaseDC(std::ptr::null_mut(), screen);
+
+            write_bitmap(path, width as u32, height as u32, &pixels)
+        }
     }
 
     /// Keeps an open panel in step with the player. Cheap: a changed panel is
@@ -1030,6 +1090,37 @@ unsafe fn apps_use_dark_mode() -> bool {
         &mut size,
     );
     status == 0 && light == 0
+}
+
+/// Writes the 32-bit BMP GDI itself would: a file header, a bitmap header, then
+/// the rows exactly as the DIB holds them.
+fn write_bitmap(
+    path: &std::path::Path,
+    width: u32,
+    height: u32,
+    pixels: &[u8],
+) -> std::io::Result<()> {
+    use std::io::Write;
+
+    let image = width * 4 * height;
+    let mut file = std::io::BufWriter::new(std::fs::File::create(path)?);
+    file.write_all(b"BM")?;
+    file.write_all(&(54 + image).to_le_bytes())?;
+    file.write_all(&0u32.to_le_bytes())?;
+    file.write_all(&54u32.to_le_bytes())?;
+    file.write_all(&40u32.to_le_bytes())?;
+    file.write_all(&(width as i32).to_le_bytes())?;
+    file.write_all(&(height as i32).to_le_bytes())?;
+    file.write_all(&1u16.to_le_bytes())?;
+    file.write_all(&32u16.to_le_bytes())?;
+    file.write_all(&0u32.to_le_bytes())?;
+    file.write_all(&image.to_le_bytes())?;
+    file.write_all(&2835i32.to_le_bytes())?;
+    file.write_all(&2835i32.to_le_bytes())?;
+    file.write_all(&0u32.to_le_bytes())?;
+    file.write_all(&0u32.to_le_bytes())?;
+    file.write_all(pixels)?;
+    file.flush()
 }
 
 fn wide(text: &str) -> Vec<u16> {

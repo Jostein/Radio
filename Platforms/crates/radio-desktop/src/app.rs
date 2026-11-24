@@ -79,13 +79,26 @@ impl App {
         };
         app.sync();
 
-        // The prototype's measurement step has no mouse to click the tray icon
-        // with, so it asks for the panel to be open from the start.
+        // The prototype's measurements have no mouse to click the tray icon
+        // with, so they ask for the panel to be open from the start. A snapshot
+        // path additionally draws it into a bitmap and quits: a worker without
+        // a screen is looked at through that file, never through Remote Desktop.
         #[cfg(target_os = "windows")]
         if std::env::var_os("RADIO_FLYOUT_DEMO").is_some() {
             let content = app.panel_content();
             if let Some(panel) = app.panel.as_mut() {
                 panel.demo(content);
+            }
+            if let Some(path) = std::env::var_os("RADIO_FLYOUT_SNAPSHOT") {
+                let path = std::path::PathBuf::from(path);
+                match app.panel.as_ref().map(|panel| panel.snapshot(&path)) {
+                    Some(Ok(())) => eprintln!("radio: drew the panel into {}", path.display()),
+                    Some(Err(error)) => {
+                        eprintln!("radio: could not draw {}: {error}", path.display())
+                    }
+                    None => eprintln!("radio: the flyout panel is off, so nothing to draw"),
+                }
+                std::process::exit(0);
             }
         }
 
