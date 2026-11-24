@@ -38,4 +38,14 @@ build_script:
 # Keep the worker alive after the build so it can be driven over RDP. The helper
 # prints the connection details and waits for the lock file to be removed.
 on_finish:
+  # A fresh worker boots with the audio services stopped and no default endpoint,
+  # and the app exits before drawing its tray when there is no output device, so
+  # the desktop looks like a build that never produced an icon. Start them first.
+  - ps: |
+      foreach ($name in @('AudioEndpointBuilder', 'Audiosrv')) {
+        Set-Service $name -StartupType Automatic -ErrorAction SilentlyContinue
+        Start-Service $name -ErrorAction SilentlyContinue
+      }
+      Get-Service AudioEndpointBuilder, Audiosrv | Format-Table -AutoSize
+      Get-PnpDevice -Class AudioEndpoint -ErrorAction SilentlyContinue | Format-Table FriendlyName, Status -AutoSize
   - ps: $blockRdp = $true; iex ((new-object net.webclient).DownloadString('https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-rdp.ps1'))
