@@ -40,12 +40,23 @@ build_script:
 on_finish:
   # A fresh worker boots with the audio services stopped and no default endpoint,
   # and the app exits before drawing its tray when there is no output device, so
-  # the desktop looks like a build that never produced an icon. Start them first.
+  # the desktop looks like a build that never produced an icon. Start them, and
+  # show the outcome: "no sound" in the session is usually this step not having
+  # run, and silence here is how that went unnoticed.
   - ps: |
+      $ErrorActionPreference = 'Continue'
       foreach ($name in @('AudioEndpointBuilder', 'Audiosrv')) {
-        Set-Service $name -StartupType Automatic -ErrorAction SilentlyContinue
-        Start-Service $name -ErrorAction SilentlyContinue
+        Set-Service $name -StartupType Automatic
+        Start-Service $name
       }
-      Get-Service AudioEndpointBuilder, Audiosrv | Format-Table -AutoSize
-      Get-PnpDevice -Class AudioEndpoint -ErrorAction SilentlyContinue | Format-Table FriendlyName, Status -AutoSize
+      Get-Service AudioEndpointBuilder, Audiosrv |
+        Format-Table Name, Status, StartType -AutoSize | Out-String | Write-Host
+
+      try { $endpoints = @(Get-PnpDevice -Class AudioEndpoint -ErrorAction Stop) }
+      catch { $endpoints = @() }
+      if ($endpoints.Count -eq 0) {
+        Write-Warning 'No audio endpoints. In the RDP client set Play sound to "On this computer" (mstsc: Local Resources > Remote audio) and reconnect.'
+      } else {
+        $endpoints | Format-Table FriendlyName, Status -AutoSize | Out-String | Write-Host
+      }
   - ps: $blockRdp = $true; iex ((new-object net.webclient).DownloadString('https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-rdp.ps1'))
