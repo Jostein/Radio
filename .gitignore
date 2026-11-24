@@ -4,3 +4,4 @@ build/
 .swiftpm/
 .freebuff/
 NOTES.local.md
+.build-x86/
