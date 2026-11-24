@@ -41,7 +41,6 @@ mod win32_find {
     // Windows bindings than the window itself does.
     const LB_ADDSTRING: u32 = 0x0180;
     const LB_RESETCONTENT: u32 = 0x0184;
-    const LB_SETCURSEL: u32 = 0x0186;
     const LB_GETCURSEL: u32 = 0x0188;
 
     const BS_DEFPUSHBUTTON: u32 = 0x0001;
@@ -49,7 +48,6 @@ mod win32_find {
 
     struct State {
         query: HWND,
-        search: HWND,
         results: HWND,
         detail: HWND,
         add: HWND,
@@ -317,7 +315,7 @@ mod win32_find {
                 416,
                 26,
             );
-            let search = child(
+            child(
                 dialog,
                 "BUTTON",
                 "Search",
@@ -371,7 +369,6 @@ mod win32_find {
 
             let state = Box::new(State {
                 query,
-                search,
                 results,
                 detail,
                 add,
@@ -404,7 +401,6 @@ mod win32_find {
                 DispatchMessageW(&message);
             }
 
-            let _ = search;
             let state = Box::from_raw(pointer);
             state.chosen.clone()
         }
