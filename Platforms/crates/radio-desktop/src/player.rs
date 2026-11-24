@@ -66,13 +66,18 @@ impl Player {
     pub fn new(audio: Audio, volume: f32) -> Player {
         let (worker_tx, worker_rx) = mpsc::channel();
         audio.set_volume(volume);
+        let state = if audio.has_output() {
+            State::Idle
+        } else {
+            State::Failed(audio::NO_OUTPUT.to_string())
+        };
 
         Player {
             audio,
             monitor: Monitor::spawn(),
             worker_tx,
             worker_rx,
-            state: State::Idle,
+            state,
             current: None,
             title: None,
             child: None,
@@ -194,6 +199,21 @@ impl Player {
             return;
         };
 
+        // Without a device there is nothing to play into, so say that rather than
+        // reconnecting to a stream nobody can hear. `watch` keeps looking for a
+        // device once a second, which is how a machine whose audio service was
+        // started late recovers without a restart.
+        if !self.audio.refresh_output() {
+            self.generation += 1;
+            self.monitor.stop(true);
+            self.stop_child();
+            self.title = None;
+            self.reconnect_attempt = 0;
+            self.retry_at = None;
+            self.state = State::Failed(audio::NO_OUTPUT.to_string());
+            return;
+        }
+
         self.generation += 1;
         let generation = self.generation;
         self.audio.active();
@@ -209,8 +229,8 @@ impl Player {
         };
 
         let sender = self.worker_tx.clone();
-        let sample_rate = self.audio.sample_rate;
-        let channels = self.audio.channels;
+        let sample_rate = self.audio.sample_rate();
+        let channels = self.audio.channels();
 
         thread::Builder::new()
             .name("tune-in".to_string())
@@ -270,6 +290,19 @@ impl Player {
             if let Some(at) = self.retry_at {
                 if Instant::now() >= at {
                     self.retry_at = None;
+                    self.begin();
+                }
+            }
+            return;
+        }
+
+        // A device that appears later (audio services started, a speaker plugged
+        // in, an RDP session that now redirects audio) clears the complaint and
+        // resumes the station that was asked for.
+        if !self.audio.has_output() {
+            if self.audio.refresh_output() {
+                self.state = State::Idle;
+                if self.current.is_some() {
                     self.begin();
                 }
             }

@@ -27,7 +27,7 @@ impl App {
     pub fn new() -> Result<App, String> {
         let store = Store::load();
         let volume = store.volume as f32;
-        let audio = crate::audio::Audio::start(volume)?;
+        let audio = crate::audio::Audio::start_or_silent(volume);
         let player = Player::new(audio, volume);
 
         let built = menu::build(&store, &player);

@@ -2,7 +2,7 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use std::collections::VecDeque;
 use std::io::Read;
 use std::process::{Child, Command, Stdio};
-use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -19,8 +19,10 @@ pub struct Audio {
     /// open costs a scheduling thread in the audio server for silence, and keeps
     /// the speakers away from every other app.
     stream: Mutex<Option<cpal::Stream>>,
-    device: cpal::Device,
-    config: cpal::StreamConfig,
+    /// The chosen output device, or `None` when the machine had none at startup.
+    /// The app then keeps its tray, says so in the menu, and picks a device up
+    /// when one appears instead of exiting before anything is drawn.
+    output: Mutex<Option<Output>>,
     ring: Arc<Ring>,
     volume: Arc<AtomicU32>,
     stopped: Arc<AtomicBool>,
@@ -29,9 +31,21 @@ pub struct Audio {
     /// null device, or a device whose callback drains eagerly) keeps the buffer
     /// empty while audio is playing perfectly well.
     pushed: Arc<AtomicU64>,
-    pub sample_rate: u32,
-    pub channels: u16,
+    sample_rate: AtomicU32,
+    channels: AtomicU16,
 }
+
+/// What has to be known before a stream can be built. Absent while the machine
+/// has no default output device.
+struct Output {
+    device: cpal::Device,
+    config: cpal::StreamConfig,
+}
+
+/// The message the menu shows when the machine offers no default output device:
+/// a server image whose audio services are stopped, or a remote session that does
+/// not redirect audio.
+pub const NO_OUTPUT: &str = "No audio output device is available.";
 
 struct RingInner {
     samples: VecDeque<f32>,
@@ -113,54 +127,74 @@ impl Ring {
 }
 
 impl Audio {
+    /// An app with a device. Prefer `start_or_silent`, which keeps the tray on a
+    /// machine that has none.
     pub fn start(volume: f32) -> Result<Audio, String> {
-        let host = cpal::default_host();
-        let device = host
-            .default_output_device()
-            .ok_or_else(|| "No audio output device is available.".to_string())?;
+        let (device, config, sample_rate, channels) = query_output()?;
+        Ok(Audio::new(volume, Some(Output { device, config }), sample_rate, channels))
+    }
 
-        // The device's own default rate is the one every backend accepts; asking
-        // for the maximum rate makes some (for example ALSA's null plugin) reject
-        // the configuration outright.
-        let default = device
-            .default_output_config()
-            .map_err(|error| format!("The audio output could not be described: {error}"))?;
-        let preferred_rate = default.sample_rate();
+    /// Always succeeds. Without an output device the player reports the problem
+    /// in its menu, instead of the app exiting before the tray exists.
+    pub fn start_or_silent(volume: f32) -> Audio {
+        match Audio::start(volume) {
+            Ok(audio) => audio,
+            Err(_) => Audio::new(volume, None, 48_000, 2),
+        }
+    }
 
-        let supported = device
-            .supported_output_configs()
-            .map_err(|error| format!("Audio devices could not be queried: {error}"))?
-            .filter(|range| range.sample_format() == cpal::SampleFormat::F32)
-            .find_map(|range| range.try_with_sample_rate(preferred_rate))
-            .or_else(|| {
-                device
-                    .supported_output_configs()
-                    .ok()?
-                    .filter(|range| range.sample_format() == cpal::SampleFormat::F32)
-                    .next()
-                    .map(|range| range.with_max_sample_rate())
-            })
-            .ok_or_else(|| "The audio device has no float output format.".to_string())?;
-
-        let sample_rate = supported.sample_rate().0;
-        let channels = supported.channels();
-        let config = supported.config();
-
-        let ring = Arc::new(Ring::new((sample_rate as usize * channels as usize) / 2));
-        let volume = Arc::new(AtomicU32::new(volume.clamp(0.0, 1.0).to_bits()));
-        let pushed = Arc::new(AtomicU64::new(0));
-
-        Ok(Audio {
+    fn new(volume: f32, output: Option<Output>, sample_rate: u32, channels: u16) -> Audio {
+        Audio {
             stream: Mutex::new(None),
-            device,
-            config,
-            ring,
-            volume,
+            output: Mutex::new(output),
+            ring: Arc::new(Ring::new((sample_rate as usize * channels as usize) / 2)),
+            volume: Arc::new(AtomicU32::new(volume.clamp(0.0, 1.0).to_bits())),
             stopped: Arc::new(AtomicBool::new(false)),
-            pushed,
-            sample_rate,
-            channels,
-        })
+            pushed: Arc::new(AtomicU64::new(0)),
+            sample_rate: AtomicU32::new(sample_rate),
+            channels: AtomicU16::new(channels),
+        }
+    }
+
+    pub fn sample_rate(&self) -> u32 {
+        self.sample_rate.load(Ordering::Relaxed)
+    }
+
+    pub fn channels(&self) -> u16 {
+        self.channels.load(Ordering::Relaxed)
+    }
+
+    /// True when there is a device to play through.
+    pub fn has_output(&self) -> bool {
+        match self.output.lock() {
+            Ok(guard) => guard.is_some(),
+            Err(poisoned) => poisoned.into_inner().is_some(),
+        }
+    }
+
+    /// Opens the default device if the app started without one, and says whether
+    /// a device is available afterwards. Called once a second while there is none,
+    /// so starting the audio service or plugging a speaker in is enough.
+    pub fn refresh_output(&self) -> bool {
+        if self.has_output() {
+            return true;
+        }
+
+        let Ok((device, config, sample_rate, channels)) = query_output() else {
+            return false;
+        };
+
+        // Anything that plays later asks for these again, so a device whose rate
+        // differs from the silent default still gets the stream it wants.
+        self.sample_rate.store(sample_rate, Ordering::Relaxed);
+        self.channels.store(channels, Ordering::Relaxed);
+
+        let output = Some(Output { device, config });
+        match self.output.lock() {
+            Ok(mut guard) => *guard = output,
+            Err(poisoned) => *poisoned.into_inner() = output,
+        }
+        true
     }
 
     /// Opens the device and starts the callbacks, if they are not running.
@@ -173,20 +207,33 @@ impl Audio {
             return;
         }
 
+        if !self.refresh_output() {
+            return;
+        }
+
         let ring = self.ring.clone();
         let volume = self.volume.clone();
-        let opened = self
-            .device
-            .build_output_stream(
-                &self.config,
-                move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
-                    let gain = f32::from_bits(volume.load(Ordering::Relaxed));
-                    ring.drain(data, gain);
-                },
-                |error| eprintln!("radio: audio output error: {error}"),
-                None,
-            )
-            .map_err(|error| error.to_string());
+        let opened = {
+            let output = match self.output.lock() {
+                Ok(output) => output,
+                Err(poisoned) => poisoned.into_inner(),
+            };
+            let Some(output) = output.as_ref() else {
+                return;
+            };
+            output
+                .device
+                .build_output_stream(
+                    &output.config,
+                    move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
+                        let gain = f32::from_bits(volume.load(Ordering::Relaxed));
+                        ring.drain(data, gain);
+                    },
+                    |error| eprintln!("radio: audio output error: {error}"),
+                    None,
+                )
+                .map_err(|error| error.to_string())
+        };
 
         match opened {
             Ok(stream) => match stream.play() {
@@ -278,6 +325,41 @@ impl Audio {
     pub fn pushed(&self) -> u64 {
         self.pushed.load(Ordering::Relaxed)
     }
+}
+
+/// Asks the system for its default output device and the format to feed it.
+fn query_output() -> Result<(cpal::Device, cpal::StreamConfig, u32, u16), String> {
+    let host = cpal::default_host();
+    let device = host
+        .default_output_device()
+        .ok_or_else(|| NO_OUTPUT.to_string())?;
+
+    // The device's own default rate is the one every backend accepts; asking
+    // for the maximum rate makes some (for example ALSA's null plugin) reject
+    // the configuration outright.
+    let default = device
+        .default_output_config()
+        .map_err(|error| format!("The audio output could not be described: {error}"))?;
+    let preferred_rate = default.sample_rate();
+
+    let supported = device
+        .supported_output_configs()
+        .map_err(|error| format!("Audio devices could not be queried: {error}"))?
+        .filter(|range| range.sample_format() == cpal::SampleFormat::F32)
+        .find_map(|range| range.try_with_sample_rate(preferred_rate))
+        .or_else(|| {
+            device
+                .supported_output_configs()
+                .ok()?
+                .filter(|range| range.sample_format() == cpal::SampleFormat::F32)
+                .next()
+                .map(|range| range.with_max_sample_rate())
+        })
+        .ok_or_else(|| "The audio device has no float output format.".to_string())?;
+
+    let sample_rate = supported.sample_rate().0;
+    let channels = supported.channels();
+    Ok((device, supported.config(), sample_rate, channels))
 }
 
 /// The decoder binary: a copy beside the app first, then `PATH`.
