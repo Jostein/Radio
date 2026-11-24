@@ -83,4 +83,18 @@ on_finish:
       Start-Sleep -Seconds 4
       Get-Process radio -ErrorAction SilentlyContinue |
         Format-Table Id, ProcessName, MainWindowTitle -AutoSize | Out-String | Write-Host
+  # The app's own build slot is the account's only one, so a paused worker that
+  # nobody connects to blocks every later build for the full hour. Expire the
+  # pause instead: a background job deletes the lock file after RADIO_RDP_MINUTES
+  # (or 20) and the build carries on by itself.
+  - ps: |
+      $minutes = 20
+      if ($env:RADIO_RDP_MINUTES) { $minutes = [int]$env:RADIO_RDP_MINUTES }
+      Start-Job -ScriptBlock {
+        param($seconds)
+        Start-Sleep -Seconds $seconds
+        $lock = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Delete me to continue build.txt'
+        Remove-Item $lock -Force -ErrorAction SilentlyContinue
+      } -ArgumentList ($minutes * 60) | Out-Null
+      "Pause expires in $minutes minutes"
   - ps: $blockRdp = $true; iex ((new-object net.webclient).DownloadString('https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-rdp.ps1'))
