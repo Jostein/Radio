@@ -58,6 +58,27 @@ jobs:
           $exe = Get-Item target\release\radio.exe
           "{0:N1} MB  radio.exe" -f ($exe.Length / 1MB)
 
+      # The flyout draws with GDI, so looking at it needs a bitmap, not a
+      # desktop: RADIO_FLYOUT_SNAPSHOT fills one off-screen and the app quits.
+      # On dispatch only — the artifact exists to look at the prototype, not to
+      # ride along with every Windows build.
+      - name: Draw the tray flyout
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          $env:RADIO_FLYOUT_DEMO = '1'
+          $env:RADIO_FLYOUT_SNAPSHOT = (Join-Path (Get-Location) 'panel.bmp')
+          $run = Start-Process .\target\release\radio.exe -Wait -PassThru
+          "radio.exe exit $($run.ExitCode)"
+          if (-not (Test-Path $env:RADIO_FLYOUT_SNAPSHOT)) { throw 'radio.exe drew no panel bitmap' }
+          "{0:N0} B  panel.bmp" -f (Get-Item $env:RADIO_FLYOUT_SNAPSHOT).Length
+
+      - uses: actions/upload-artifact@v4
+        if: github.event_name == 'workflow_dispatch'
+        with:
+          name: Radio-flyout-panel
+          path: ${{ github.workspace }}/Platforms/panel.bmp
+          if-no-files-found: error
+
       # The component list mirrors what `spawn_ffmpeg` in audio.rs asks for:
       # MP3, AAC, Ogg/Vorbis and Opus, HLS over http(s), TLS through Windows'
       # own SChannel, and raw f32 PCM out. --enable-schannel has to be explicit,
