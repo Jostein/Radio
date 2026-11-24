@@ -78,7 +78,7 @@ if [ -n "${version:-}" ]; then
 else
   read -r version build <<<"$(curl -sf -X POST -H "$AUTH" -H 'Content-Type: application/json' \
     -d "{\"accountName\":\"Jostein\",\"projectSlug\":\"radio\",\"branch\":\"$BRANCH\"}" \
-    "$API/builds" | python3 -c 'import json,sys
+    "$API/account/Jostein/builds" | python3 -c 'import json,sys
 r=json.load(sys.stdin)
 b=r.get("build", r)
 print(b["version"], b["buildId"])')"
