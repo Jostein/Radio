@@ -56,6 +56,29 @@ What the build does before pausing (`appveyor.yml`, `on_finish`):
 - Playback is only truly verified through speakers: a paused worker is the only
   place that can do it, and it needs a human to click the tray icon.
 
+### Seeing the session without asking
+
+The Remote Desktop client's window cannot be captured on macOS, so the worker
+takes its own screenshots: a capture runs once into the build log, then a
+detached process saves the screen every fifteen seconds and posts it as a build
+artifact. Fetch the newest one with:
+
+```
+scripts/vm-shot.sh        # newest screen -> .rdp/vm-live.jpg
+```
+
+Traps in that path, both fixed but easy to reintroduce:
+
+- upload to `"$env:APPVEYOR_API_URL.TrimEnd('/')/api/buildjobs/$env:APPVEYOR_JOB_ID/artifacts"`.
+  The variable carries a trailing slash, and the doubled `//` answers 404 — the
+  only reason the first two attempts uploaded nothing.
+- run the capture in a separate `powershell -EncodedCommand` process. Inside a
+  `Start-Job` it failed without a trace, and the encoded form also sidesteps
+  every quoting rule between YAML and PowerShell.
+
+The capture runs before the RDP client connects, so the first picture is the
+worker's 1024x768 desktop; later ones follow the session's real size.
+
 ### Branch
 
 Prototype work lives on `flyout-prototype`; AppVeyor builds it on every push and
