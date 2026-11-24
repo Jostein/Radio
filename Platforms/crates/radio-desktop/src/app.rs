@@ -25,6 +25,9 @@ pub struct App {
     last_current: Option<String>,
     saved_mtime: Option<SystemTime>,
     last_file_check: Instant,
+    /// The wall clock at the previous turn, so a machine that was asleep can be
+    /// told from one that was merely idle.
+    last_tick: SystemTime,
 }
 
 impl App {
@@ -76,6 +79,7 @@ impl App {
             last_current: None,
             saved_mtime,
             last_file_check: Instant::now(),
+            last_tick: std::time::SystemTime::now(),
         };
         app.sync();
 
@@ -112,6 +116,7 @@ impl App {
 
     /// One turn of the app loop. Cheap; called every few tens of milliseconds.
     pub fn pump(&mut self) {
+        self.recover_after_wake();
         self.handle_menu_events();
         self.handle_media();
         #[cfg(target_os = "windows")]
@@ -124,8 +129,24 @@ impl App {
         self.handle_panel();
     }
 
-    fn handle_menu_events(&mut self) {
-        while let Ok(event) = MenuEvent::receiver().try_recv() {
+    /// Sleep freezes the socket, the sample counter and the polling loop, so a
+    /// turn that arrives much later than the loop's own interval means the
+    /// machine was away. Tune in again rather than trusting a connection that
+    /// sat idle for hours, which is what the macOS app does on `didWake`.
+    fn recover_after_wake(&mut self) {
+        let now = SystemTime::now();
+        let away = now
+            .duration_since(self.last_tick)
+            .map(|gap| gap >= Duration::from_secs(30))
+            .unwrap_or(true);
+        self.last_tick = now;
+
+        if away {
+            self.player.rejoin();
+        }
+    }
+
+    fn handle_menu_events(&mut self) {        while let Ok(event) = MenuEvent::receiver().try_recv() {
             let id = event.id.0.clone();
 
             match id.as_str() {
@@ -135,6 +156,13 @@ impl App {
                 menu::YOUTUBE => self.open_track_search(),
                 menu::ADD_STATION => {
                     if let Some(station) = crate::dialog::add_station() {
+                        self.store.add(station);
+                        self.rebuild();
+                    }
+                }
+                #[cfg(target_os = "windows")]
+                menu::FIND_STATIONS => {
+                    if let Some(station) = crate::find::find_station() {
                         self.store.add(station);
                         self.rebuild();
                     }

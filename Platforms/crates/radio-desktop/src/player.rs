@@ -127,6 +127,17 @@ impl Player {
         self.begin();
     }
 
+    /// Comes back from sleep: the output device and the socket have both sat
+    /// through it, so reopen the device and tune the current station in again
+    /// instead of trusting a connection that stopped delivering hours ago.
+    pub fn rejoin(&mut self) {
+        self.audio.reopen();
+        if self.is_active() {
+            self.reconnect_attempt = 0;
+            self.begin();
+        }
+    }
+
     pub fn pause(&mut self) {
         // Bump the generation so a connection that lands after the click cannot
         // flip the app back into a playing state.

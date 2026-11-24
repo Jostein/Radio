@@ -291,14 +291,14 @@ Three things to watch for, because they are the parts most likely to need a fix:
 |---|---|---|
 | Menu bar / tray only | yes | yes |
 | Stations by URL + title | dialog | dialog (GTK on Linux, Win32 on Windows), same validation |
-| Find stations by name (Radio Browser) | yes | not yet |
+| Find stations by name (Radio Browser) | yes | Windows: Find Stations… menu; Linux: not yet |
 | Volume | slider, persisted | Louder / Quieter items, persisted |
 | ICY, feeds, discovery | yes | yes (same rules, same caps) |
 | HLS | AVPlayer | ffmpeg |
 | Reconnect with backoff | 1–30 s, 6 attempts | same |
 | Stall watchdog | 5 s × 4 | 1 s × 4 on a stalled sample counter |
 | Pause keeps track, resume rejoins live | yes | yes |
-| Sleep/wake recovery | yes | not yet |
+| Sleep/wake recovery | yes | yes, by noticing a turn that arrives late |
 | Title suggested from the stream | yes | yes (same rules, same fallback) |
 | Click track to search YouTube | yes | yes |
 | Control Center / media keys | `MPNowPlayingInfoCenter` | MPRIS on Linux, SMTC on Windows |
@@ -457,6 +457,8 @@ one decoder covering HLS, MP3, AAC and Ogg.
 2. Prove SMTC on a real Windows. It compiles and links, but the flyout, the
    hidden window and the media keys have never been exercised; the window style
    is the part I would expect to need adjusting.
-3. Sleep/wake handling: a laptop resume should rejoin the stream, as the macOS
-   build does.
+3. Sleep/wake handling is in place for both ports: a loop turn that arrives
+   more than 30 seconds late reopens the device and tunes in again, the way the
+   macOS build reacts to `didWake`. It has not been tried on a laptop that
+   actually slept, because nothing here has been.
 4. Native decoding for non-HLS streams, dropping ffmpeg for the common case.

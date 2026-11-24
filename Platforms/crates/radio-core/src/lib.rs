@@ -3,6 +3,7 @@
 //! Everything here is synchronous and free of windowing or audio libraries, so
 //! it can be unit tested on any platform and reused by the tray app.
 
+pub mod directory;
 pub mod feeds;
 pub mod icy;
 pub mod metadata;
@@ -13,6 +14,7 @@ pub mod station;
 pub mod store;
 pub mod title;
 
+pub use directory::search as search_directory;
 pub use icy::TrackUpdate;
 pub use metadata::suggested_title;
 pub use monitor::{Monitor, Update};

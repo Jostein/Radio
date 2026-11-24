@@ -8,6 +8,9 @@ pub const VOLUME_UP: &str = "vol:+";
 pub const VOLUME_DOWN: &str = "vol:-";
 pub const YOUTUBE: &str = "youtube";
 pub const ADD_STATION: &str = "add-station";
+/// Only Windows has the search window the macOS app calls Find Stations.
+#[cfg(target_os = "windows")]
+pub const FIND_STATIONS: &str = "find-stations";
 pub const OPEN_STATIONS: &str = "open-stations";
 pub const RELOAD_STATIONS: &str = "reload-stations";
 pub const QUIT: &str = "quit";
@@ -88,6 +91,11 @@ pub fn build(store: &Store, player: &Player) -> Built {
 
     let add_station = MenuItem::with_id(ADD_STATION, "Add Station…", true, None);
     let _ = menu.append(&add_station);
+    #[cfg(target_os = "windows")]
+    {
+        let find = MenuItem::with_id(FIND_STATIONS, "Find Stations…", true, None);
+        let _ = menu.append(&find);
+    }
     let _ = menu.append(&PredefinedMenuItem::separator());
 
     let open_stations = MenuItem::with_id(OPEN_STATIONS, "Open Stations File…", true, None);
