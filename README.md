@@ -17,8 +17,8 @@ Prebuilt desktop builds are on the [releases page](https://github.com/Jostein/Ra
 
 | Platform | Asset | Notes |
 |---|---|---|
-| **macOS 14+** | `Radio-1.3-macos.zip` | Universal Apple silicon and Intel app; ad-hoc signed, not notarized |
-| **Windows 10/11 x86_64** | `Radio-1.3-windows-x86_64.zip` | Unsigned; carries its own trimmed `ffmpeg.exe` |
+| **macOS 14+** | `Radio-1.4-macos.zip` | Universal Apple silicon and Intel app; ad-hoc signed, not notarized |
+| **Windows 10/11 x86_64** | `Radio-1.4-windows-x86_64.zip` | Unsigned; carries its own trimmed `ffmpeg.exe` |
 | **Linux x86_64** | `radio-git-r62.97e4a9e-1-x86_64.pkg.tar.zst` | Arch/Omarchy package; other distros build from source |
 
 The builds are independent of any store or AUR account. macOS and Windows are
