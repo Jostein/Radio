@@ -7,10 +7,18 @@ cd "$(dirname "$0")/.."
 API=https://ci.appveyor.com/api
 AUTH="Authorization: Bearer $(tr -d '\r\n' < .appveyor-token)"
 
+# The history listing carries no jobs, so the job id comes from the build.
 read -r job version <<<"$(curl -sf -H "$AUTH" "$API/projects/Jostein/radio/history?recordsNumber=10" |
   python3 -c 'import json,sys
-b=[x for x in json.load(sys.stdin)["builds"] if x["status"] == "running" and x["jobs"]]
-print(b[0]["jobs"][0]["jobId"], b[0]["version"]) if b else print("", "")')"
+b=[x for x in json.load(sys.stdin)["builds"] if x["status"] == "running"]
+print(b[0]["version"]) if b else print("")' |
+  while read -r version; do
+    [ -n "$version" ] || continue
+    curl -sf -H "$AUTH" "$API/projects/Jostein/radio/build/$version" |
+      python3 -c 'import json,sys
+b=json.load(sys.stdin)["build"]
+print(b["jobs"][0]["jobId"], b["version"]) if b["jobs"] else print("", "")'
+  done)"
 
 if [ -z "${job:-}" ]; then
   echo "No running build: there is no session to look at."
