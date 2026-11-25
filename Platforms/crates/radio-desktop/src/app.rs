@@ -441,6 +441,9 @@ impl App {
             log.push(panel.geometry());
             log.push(format!("stations: [{}]", panel.stations()));
         }
+        if let Some(mb) = working_set_mb() {
+            log.push(format!("memory: {mb:.1} MB (panel closed)"));
+        }
         log.push(format!("before: {}", self.describe()));
 
         for index in [0usize, 1] {
@@ -452,6 +455,9 @@ impl App {
                     panel.demo(content);
                 }
                 self.turn(4);
+                if let Some(mb) = working_set_mb() {
+                    log.push(format!("memory: {mb:.1} MB (panel open)"));
+                }
             }
 
             let point = self.panel.as_ref().and_then(|panel| panel.click_row(index));
@@ -608,5 +614,29 @@ impl App {
         self.last_volume.clear();
         self.last_current = None;
         self.sync();
+    }
+}
+
+/// Working set of this process in megabytes, via the Win32 process-status API.
+/// Used by the click self-test so a build log can show what the flyout costs.
+#[cfg(target_os = "windows")]
+fn working_set_mb() -> Option<f64> {
+    use windows_sys::Win32::System::ProcessStatus::{
+        GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS,
+    };
+    use windows_sys::Win32::System::Threading::GetCurrentProcess;
+    unsafe {
+        let mut pmc: PROCESS_MEMORY_COUNTERS = std::mem::zeroed();
+        pmc.cb = std::mem::size_of::<PROCESS_MEMORY_COUNTERS>() as u32;
+        let ok = GetProcessMemoryInfo(
+            GetCurrentProcess(),
+            &mut pmc as *mut _ as *mut windows_sys::Win32::System::ProcessStatus::PROCESS_MEMORY_COUNTERS,
+            std::mem::size_of::<PROCESS_MEMORY_COUNTERS>() as u32,
+        );
+        if ok != 0 {
+            Some(pmc.WorkingSetSize as f64 / (1024.0 * 1024.0))
+        } else {
+            None
+        }
     }
 }
