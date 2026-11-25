@@ -21,7 +21,7 @@ use windows_sys::Win32::Graphics::Dwm::{
 };
 use windows_sys::Win32::Graphics::Gdi::{
     BeginPaint, BitBlt, CreateCompatibleBitmap, CreateCompatibleDC, CreateDIBSection, CreateFontW,
-    CreateSolidBrush, DeleteDC, DeleteObject, DrawTextW, Ellipse, EndPaint, FillRect, GdiFlush,
+    CreateSolidBrush, DeleteDC, DeleteObject, DrawTextW, Ellipse, EndPaint, GdiFlush,
     GetDC, GetStockObject, InvalidateRect, ReleaseDC, RoundRect, SelectObject, SetBkColor, SetBkMode,
     SetTextColor, BITMAPINFO, BITMAPINFOHEADER, BI_RGB, CLEARTYPE_QUALITY, DEFAULT_CHARSET,
     DIB_RGB_COLORS, DT_CENTER, DT_END_ELLIPSIS, DT_LEFT, DT_NOPREFIX, DT_RIGHT, DT_SINGLELINE,
@@ -782,7 +782,7 @@ unsafe fn paint(state: &State, hdc: HDC) {
             } else {
                 state.font
             },
-            if current { theme.accent } else { theme.text },
+            theme.text,
             text,
             &row.title,
             DT_LEFT,

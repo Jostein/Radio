@@ -74,24 +74,32 @@ on_finish:
         $endpoints | Format-Table FriendlyName, Status -AutoSize | Out-String | Write-Host
       }
   # The panel's own pixels, drawn off-screen instead of onto the desktop: the
-  # only way to look at the flyout when no hand can open it. The app renders and
-  # exits, so this costs a second and changes nothing else about the build.
+  # only way to look at the flyout when no hand can open it. Both themes are
+  # drawn, because the worker boots in light mode and dark is the common case.
   - ps: |
       $env:RADIO_FLYOUT_DEMO = '1'
-      $env:RADIO_FLYOUT_SNAPSHOT = Join-Path $env:TEMP 'panel.bmp'
-      Remove-Item $env:RADIO_FLYOUT_SNAPSHOT -ErrorAction SilentlyContinue
-      # The binary is GUI-subsystem now, so calling it with & returns at once and
-      # the file was tested for before it existed.
-      Start-Process -FilePath 'target\release\radio.exe' -WorkingDirectory (Get-Location).Path -Wait
-      for ($i = 0; $i -lt 20 -and -not (Test-Path $env:RADIO_FLYOUT_SNAPSHOT); $i++) {
-        Start-Sleep -Milliseconds 250
+      $personalise = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize'
+      $wasLight = (Get-ItemProperty $personalise -Name AppsUseLightTheme -ErrorAction SilentlyContinue).AppsUseLightTheme
+      function Save-Panel($name) {
+        $env:RADIO_FLYOUT_SNAPSHOT = Join-Path $env:TEMP $name
+        Remove-Item $env:RADIO_FLYOUT_SNAPSHOT -ErrorAction SilentlyContinue
+        # GUI-subsystem binary: & returns at once, so wait for the process and
+        # then for the file it writes on the way out.
+        Start-Process -FilePath 'target\release\radio.exe' -WorkingDirectory (Get-Location).Path -Wait
+        for ($i = 0; $i -lt 20 -and -not (Test-Path $env:RADIO_FLYOUT_SNAPSHOT); $i++) {
+          Start-Sleep -Milliseconds 250
+        }
+        if (Test-Path $env:RADIO_FLYOUT_SNAPSHOT) {
+          & appveyor PushArtifact $env:RADIO_FLYOUT_SNAPSHOT -FileName $name | Out-Null
+          "panel snapshot uploaded: $name"
+        } else {
+          "no panel snapshot: $name"
+        }
       }
-      if (Test-Path $env:RADIO_FLYOUT_SNAPSHOT) {
-        & appveyor PushArtifact $env:RADIO_FLYOUT_SNAPSHOT -FileName 'panel.bmp' | Out-Null
-        'panel snapshot uploaded'
-      } else {
-        'no panel snapshot'
-      }
+      Save-Panel 'panel-light.bmp'
+      Set-ItemProperty $personalise -Name AppsUseLightTheme -Value 0
+      Save-Panel 'panel-dark.bmp'
+      if ($null -ne $wasLight) { Set-ItemProperty $personalise -Name AppsUseLightTheme -Value $wasLight }
       Remove-Item Env:RADIO_FLYOUT_DEMO, Env:RADIO_FLYOUT_SNAPSHOT
   # Start the app before pausing. Typing into the session over RDP is unreliable
   # (the worker's keymap mangles punctuation, and keystrokes land wherever focus
