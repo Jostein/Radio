@@ -313,6 +313,60 @@ impl App {
                     self.store.set_volume(volume);
                     self.player.set_volume(volume as f32);
                 }
+                crate::flyout::Action::Remove(id) => {
+                    if self.store.remove(&id) {
+                        if self
+                            .player
+                            .current
+                            .as_ref()
+                            .map(|station| station.id == id)
+                            .unwrap_or(false)
+                        {
+                            self.player.stop();
+                        }
+                        self.rebuild();
+                    }
+                }
+                crate::flyout::Action::AddStation => {
+                    let answer = crate::dialog::add_station();
+                    self.last_tick = std::time::SystemTime::now();
+                    if let Some(station) = answer {
+                        let known = self
+                            .store
+                            .stations
+                            .iter()
+                            .find(|saved| saved.url_string == station.url_string)
+                            .cloned();
+                        match known {
+                            Some(saved) => self.player.play(saved),
+                            None => {
+                                self.store.add(station.clone());
+                                self.rebuild();
+                                self.player.play(station);
+                            }
+                        }
+                    }
+                }
+                crate::flyout::Action::FindStations => {
+                    let answer = crate::find::find_station();
+                    self.last_tick = std::time::SystemTime::now();
+                    if let Some(station) = answer {
+                        self.store.add(station);
+                        self.rebuild();
+                    }
+                }
+                crate::flyout::Action::ReloadStations => {
+                    self.store.reload();
+                    self.rebuild();
+                }
+                crate::flyout::Action::OpenStationsFile => {
+                    let _ = open::that(self.store.stations_file());
+                }
+                crate::flyout::Action::Quit => {
+                    self.player.stop();
+                    std::process::exit(0);
+                }
+                crate::flyout::Action::YouTube => self.open_track_search(),
             }
         }
 
@@ -346,6 +400,7 @@ impl App {
                 })
                 .collect(),
             current: self.player.current.as_ref().map(|station| station.id.clone()),
+            active: self.player.is_active(),
         }
     }
 
@@ -362,6 +417,7 @@ impl App {
         content.title = first.title.clone();
         content.status = crate::player::State::Playing.description();
         content.current = Some(first.id.clone());
+        content.active = true;
         content
     }
 

@@ -76,6 +76,9 @@ pub struct Content {
     pub volume: f64,
     pub rows: Vec<Row>,
     pub current: Option<String>,
+    /// Whether playback is currently active, so the toggle button can read
+    /// "Pause" or "Play" the way the menu's toggle item does.
+    pub active: bool,
 }
 
 /// Where the panel should appear: the tray icon's screen rectangle.
@@ -92,6 +95,13 @@ pub enum Action {
     Play(String),
     Toggle,
     Volume(f64),
+    Remove(String),
+    AddStation,
+    FindStations,
+    OpenStationsFile,
+    ReloadStations,
+    Quit,
+    YouTube,
 }
 
 struct Theme {
@@ -155,6 +165,7 @@ struct State {
     filter: String,
     scroll: usize,
     hover: Option<usize>,
+    hover_button: Option<usize>,
     dragging: bool,
     field_focused: bool,
     actions: Vec<Action>,
@@ -187,6 +198,13 @@ struct Layout {
     field: RECT,
     rows_top: i32,
     visible: usize,
+    toggle_button: RECT,
+    footer_top: i32,
+    add_button: RECT,
+    find_button: RECT,
+    reload_button: RECT,
+    open_button: RECT,
+    quit_button: RECT,
 }
 
 impl State {
@@ -279,10 +297,12 @@ impl Panel {
                     volume: 1.0,
                     rows: Vec::new(),
                     current: None,
+                    active: false,
                 },
                 filter: String::new(),
                 scroll: 0,
                 hover: None,
+                hover_button: None,
                 dragging: false,
                 field_focused: false,
                 actions: Vec::new(),
@@ -416,7 +436,26 @@ impl Panel {
         state.scroll = state.scroll.min(state.max_scroll());
         if state.visible {
             state.hover = None;
-            unsafe { state.invalidate() };
+            // The list grew or shrank, so the window's height has to follow it;
+            // otherwise rows are clipped or the panel floats above empty space.
+            unsafe {
+                let layout = layout_for(state);
+                let mut rect: RECT = std::mem::zeroed();
+                GetWindowRect(state.hwnd, &mut rect);
+                if rect.bottom - rect.top != layout.height {
+                    SetWindowPos(
+                        state.hwnd,
+                        std::ptr::null_mut(),
+                        rect.left,
+                        rect.top,
+                        layout.width,
+                        layout.height,
+                        SWP_NOACTIVATE | SWP_NOZORDER,
+                    );
+                    position_edit(state, &layout);
+                }
+                state.invalidate();
+            }
         }
     }
 
@@ -610,7 +649,7 @@ fn layout_for(state: &State) -> Layout {
     let title = RECT {
         left: PAD,
         top: y,
-        right: WIDTH - PAD,
+        right: WIDTH - PAD - 76,
         bottom: y + title_height,
     };
     y += title_height;
@@ -660,9 +699,42 @@ fn layout_for(state: &State) -> Layout {
     let rows_top = y;
     y += visible as i32 * ROW_HEIGHT;
 
+    let footer_top = y + 4;
+    let by = footer_top + 8;
+    let button_height = 22;
+
+    // Play/Pause sits at the right of the title row, mirroring the menu's
+    // toggle item. It is only enabled when something is loaded, which the
+    // click handler checks against `content.current`.
+    let toggle_button = RECT {
+        left: WIDTH - PAD - 72,
+        top: PAD,
+        right: WIDTH - PAD,
+        bottom: PAD + 22,
+    };
+
+    let mut bx = PAD;
+    let make = |bx: &mut i32, width: i32| -> RECT {
+        let r = RECT {
+            left: *bx,
+            top: by,
+            right: *bx + width,
+            bottom: by + button_height,
+        };
+        *bx += width + 4;
+        r
+    };
+    let add_button = make(&mut bx, 40);
+    let find_button = make(&mut bx, 44);
+    let reload_button = make(&mut bx, 56);
+    let open_button = make(&mut bx, 46);
+    let quit_button = make(&mut bx, 42);
+
+    let height = by + button_height + PAD;
+
     Layout {
         width: WIDTH,
-        height: y + PAD,
+        height,
         title,
         status,
         detail,
@@ -671,6 +743,13 @@ fn layout_for(state: &State) -> Layout {
         field,
         rows_top,
         visible,
+        toggle_button,
+        footer_top,
+        add_button,
+        find_button,
+        reload_button,
+        open_button,
+        quit_button,
     }
 }
 
@@ -871,6 +950,81 @@ unsafe fn paint(state: &State, hdc: HDC) {
         );
     }
 
+    // Play/Pause button at the right of the title row.
+    let toggle_label = if state.content.active {
+        "Pause"
+    } else {
+        "Play"
+    };
+    let toggle_hover = state.hover_button == Some(0);
+    outline(
+        memory,
+        layout.toggle_button,
+        4,
+        if toggle_hover {
+            theme.accent
+        } else {
+            theme.border
+        },
+        if toggle_hover {
+            theme.hover
+        } else {
+            theme.field
+        },
+    );
+    draw_text(
+        memory,
+        state.font_small,
+        theme.text,
+        layout.toggle_button,
+        toggle_label,
+        DT_CENTER,
+    );
+
+    // A remove affordance on the hovered row: a small "x" at its right edge.
+    if let Some(index) = state.hover {
+        let top = layout.rows_top + index as i32 * ROW_HEIGHT;
+        let x_rect = RECT {
+            left: WIDTH - PAD - 14,
+            top: top + 8,
+            right: WIDTH - PAD,
+            bottom: top + ROW_HEIGHT - 8,
+        };
+        draw_text(memory, state.font_small, theme.dim, x_rect, "×", DT_CENTER);
+    }
+
+    // Footer: a separator and a row of action buttons mirroring the menu.
+    let sep_top = layout.footer_top;
+    fill(
+        memory,
+        RECT {
+            left: PAD,
+            top: sep_top,
+            right: WIDTH - PAD,
+            bottom: sep_top + 1,
+        },
+        theme.border,
+    );
+
+    let buttons = [
+        (1usize, layout.add_button, "Add…"),
+        (2usize, layout.find_button, "Find…"),
+        (3usize, layout.reload_button, "Reload"),
+        (4usize, layout.open_button, "Open"),
+        (5usize, layout.quit_button, "Quit"),
+    ];
+    for (index, rect, label) in buttons {
+        let hovered = state.hover_button == Some(index);
+        outline(
+            memory,
+            rect,
+            4,
+            if hovered { theme.accent } else { theme.border },
+            if hovered { theme.hover } else { theme.field },
+        );
+        draw_text(memory, state.font_small, theme.text, rect, label, DT_CENTER);
+    }
+
     BitBlt(hdc, 0, 0, width, height, memory, 0, 0, SRCCOPY);
     SelectObject(memory, previous);
     DeleteObject(bitmap);
@@ -1029,12 +1183,56 @@ unsafe extern "system" fn window_proc(
                 state.hover = hover;
                 state.invalidate();
             }
+            let button = button_at(state, &layout_for(state), x, y);
+            if button != state.hover_button {
+                state.hover_button = button;
+                state.invalidate();
+            }
             0
         }
         WM_LBUTTONDOWN => {
             let x = (lparam & 0xffff) as i16 as i32;
             let y = ((lparam >> 16) & 0xffff) as i16 as i32;
             let layout = layout_for(state);
+
+            if contains(&layout.toggle_button, x, y) {
+                state.actions.push(Action::Toggle);
+                // Keep the panel open for the toggle, like a button; hide for
+                // consistency with row clicks? The menu toggles in place. Keep open.
+                return 0;
+            }
+
+            if contains(&layout.add_button, x, y) {
+                state.actions.push(Action::AddStation);
+                hide(state);
+                return 0;
+            }
+            if contains(&layout.find_button, x, y) {
+                state.actions.push(Action::FindStations);
+                hide(state);
+                return 0;
+            }
+            if contains(&layout.reload_button, x, y) {
+                state.actions.push(Action::ReloadStations);
+                hide(state);
+                return 0;
+            }
+            if contains(&layout.open_button, x, y) {
+                state.actions.push(Action::OpenStationsFile);
+                hide(state);
+                return 0;
+            }
+            if contains(&layout.quit_button, x, y) {
+                state.actions.push(Action::Quit);
+                hide(state);
+                return 0;
+            }
+
+            if contains(&layout.detail, x, y) && !state.content.detail.is_empty() {
+                state.actions.push(Action::YouTube);
+                hide(state);
+                return 0;
+            }
 
             if contains(&layout.slider, x, y) {
                 state.dragging = true;
@@ -1044,6 +1242,13 @@ unsafe extern "system" fn window_proc(
             }
 
             if let Some(index) = row_at(state, x, y) {
+                // The remove affordance occupies the right edge of the row.
+                if x >= WIDTH - PAD - 18 {
+                    let id = state.content.rows[index].id.clone();
+                    state.actions.push(Action::Remove(id));
+                    hide(state);
+                    return 0;
+                }
                 let row = state.content.rows[index].clone();
                 if state.content.current.as_deref() == Some(row.id.as_str()) {
                     state.actions.push(Action::Toggle);
@@ -1157,6 +1362,23 @@ unsafe extern "system" fn edit_proc(
 
 fn contains(rect: &RECT, x: i32, y: i32) -> bool {
     x >= rect.left && x < rect.right && y >= rect.top && y < rect.bottom
+}
+
+fn button_at(_state: &State, layout: &Layout, x: i32, y: i32) -> Option<usize> {
+    let candidates = [
+        (0usize, layout.toggle_button),
+        (1usize, layout.add_button),
+        (2usize, layout.find_button),
+        (3usize, layout.reload_button),
+        (4usize, layout.open_button),
+        (5usize, layout.quit_button),
+    ];
+    for (index, rect) in candidates {
+        if contains(&rect, x, y) {
+            return Some(index);
+        }
+    }
+    None
 }
 
 fn row_at(state: &State, x: i32, y: i32) -> Option<usize> {
