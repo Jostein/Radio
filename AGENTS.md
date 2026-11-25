@@ -69,12 +69,16 @@ scripts/vm-shot.sh        # newest screen -> .rdp/vm-live.jpg
 
 Traps in that path, both fixed but easy to reintroduce:
 
-- upload to `"$env:APPVEYOR_API_URL.TrimEnd('/')/api/buildjobs/$env:APPVEYOR_JOB_ID/artifacts"`.
-  The variable carries a trailing slash, and the doubled `//` answers 404 — the
-  only reason the first two attempts uploaded nothing.
+- upload with `appveyor PushArtifact <file> -FileName <name>`, the worker's own
+  CLI. `POST api/artifacts` answers with an object that holds no `url`, and
+  `WebClient.UploadFile` cannot post to it, while the CLI worked first time.
 - run the capture in a separate `powershell -EncodedCommand` process. Inside a
   `Start-Job` it failed without a trace, and the encoded form also sidesteps
-  every quoting rule between YAML and PowerShell.
+  every quoting rule between YAML and PowerShell — but build the whole
+  `Start-Process` line in one place: splicing the encoded string into a
+  half-written argument list leaves a stray quote and PowerShell rejects it.
+- download with `curl -L`: the artifact endpoint answers 302 and signs a storage
+  URL, so without following the redirect the file arrives empty.
 
 The capture runs before the RDP client connects, so the first picture is the
 worker's 1024x768 desktop; later ones follow the session's real size.
