@@ -365,46 +365,56 @@ impl App {
         content
     }
 
-    /// Opens the panel, clicks a station row with the real mouse, and writes
-    /// what the app did about it to `RADIO_FLYOUT_LOG`.
+    /// Clicks station rows with the real mouse and writes what the app did
+    /// about each one to `RADIO_FLYOUT_LOG`.
     ///
     /// Nobody can click a build worker's tray icon, and a posted message would
     /// skip the two things that most plausibly break a click — activation and
-    /// hit-testing — so the row is clicked the way a hand would. An empty log
-    /// line is a fact too: it says the pointer could not be moved, which means
-    /// the worker has no interactive desktop rather than a dead panel.
+    /// hit-testing — so the rows are clicked the way a hand would. The second
+    /// click is the interesting one: it asks for a station while another is
+    /// playing, which is what switching means here. A log line naming the
+    /// pointer position is a fact too, because a click that never moved the
+    /// pointer says the worker has no interactive desktop rather than a dead
+    /// panel.
     #[cfg(target_os = "windows")]
     fn click_self_test(&mut self) {
-        let index: usize = std::env::var("RADIO_FLYOUT_CLICK")
-            .ok()
-            .and_then(|value| value.parse().ok())
-            .unwrap_or(0);
         let mut log: Vec<String> = Vec::new();
 
         self.turn(6);
         if let Some(panel) = self.panel.as_ref() {
             log.push(panel.geometry());
-            log.push(format!("open before: {}", panel.is_open()));
-            log.push(format!("cursor before: {:?}", panel.cursor()));
+            log.push(format!("stations: [{}]", panel.stations()));
         }
-        log.push(format!("state before: {}", self.describe()));
+        log.push(format!("before: {}", self.describe()));
 
-        let point = self.panel.as_ref().and_then(|panel| panel.click_row(index));
-        log.push(match point {
-            Some((x, y)) => format!("clicked row {index} at {x},{y}"),
-            None => format!("row {index} is not shown"),
-        });
-        if let Some(panel) = self.panel.as_ref() {
-            log.push(format!("cursor after: {:?}", panel.cursor()));
+        for index in [0usize, 1] {
+            // Every click closes the panel, so it is opened again for the next
+            // one exactly as a second tray click would.
+            if self.panel.as_ref().map(|panel| panel.is_open()) == Some(false) {
+                let content = self.panel_content();
+                if let Some(panel) = self.panel.as_mut() {
+                    panel.demo(content);
+                }
+                self.turn(4);
+            }
+
+            let point = self.panel.as_ref().and_then(|panel| panel.click_row(index));
+            log.push(match point {
+                Some((x, y)) => format!("clicked row {index} at {x},{y}"),
+                None => format!("row {index} is not shown"),
+            });
+            if let Some(panel) = self.panel.as_ref() {
+                log.push(format!("  pointer: {:?}", panel.cursor()));
+            }
+
+            self.turn(5);
+            log.push(format!("  after 0.2s: {}", self.describe()));
+            let open = self.panel.as_ref().map(|panel| panel.is_open()).unwrap_or(false);
+            log.push(format!("  open after: {open}"));
+
+            self.turn(50);
+            log.push(format!("  after 2s: {}", self.describe()));
         }
-
-        self.turn(5);
-        log.push(format!("state after 0.2s: {}", self.describe()));
-        let open = self.panel.as_ref().map(|panel| panel.is_open()).unwrap_or(false);
-        log.push(format!("open after: {open}"));
-
-        self.turn(50);
-        log.push(format!("state after 2s: {}", self.describe()));
 
         for line in &log {
             eprintln!("radio: click: {line}");

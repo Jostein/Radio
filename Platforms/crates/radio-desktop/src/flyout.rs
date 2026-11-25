@@ -451,6 +451,17 @@ impl Panel {
         }
     }
 
+    /// The station names the list holds, in the order the rows show them.
+    pub fn stations(&self) -> String {
+        self.state()
+            .content
+            .rows
+            .iter()
+            .map(|row| row.title.as_str())
+            .collect::<Vec<_>>()
+            .join(" | ")
+    }
+
     /// Clicks row `index` with the real mouse, which is the only kind of click
     /// that tells the truth: a message posted at the window skips activation and
     /// hit-testing, the two things most likely to be wrong. Returns the screen

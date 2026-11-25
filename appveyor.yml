@@ -101,12 +101,21 @@ on_finish:
       Save-Panel 'panel-dark.bmp'
       if ($null -ne $wasLight) { Set-ItemProperty $personalise -Name AppsUseLightTheme -Value $wasLight }
       Remove-Item Env:RADIO_FLYOUT_DEMO, Env:RADIO_FLYOUT_SNAPSHOT
-  # A click is the one thing a snapshot cannot show. The panel is opened, the
-  # app clicks a station row itself with the real mouse, and writes down what it
-  # did; the log is echoed here so the build log carries the answer too.
+  # A click is the one thing a snapshot cannot show. Two stations are seeded so
+  # the second click asks for one while the other is playing — switching, the
+  # thing a click is for — and the app writes down what it did with each. The log
+  # is echoed here so the build log carries the answer too, and left in place: a
+  # session opened afterwards has two stations to switch between by hand.
   - ps: |
+      $radio = Join-Path $env:APPDATA 'Radio'
+      New-Item -ItemType Directory -Force $radio | Out-Null
+      @(
+        @{ id = 'fip-reggae'; title = 'FIP Reggae'; urlString = 'https://stream.radiofrance.fr/fipreggae/fipreggae.m3u8' },
+        @{ id = 'fip-jazz'; title = 'FIP Jazz'; urlString = 'https://stream.radiofrance.fr/fipjazz/fipjazz.m3u8' }
+      ) | ConvertTo-Json | Set-Content (Join-Path $radio 'stations.json')
+
       $env:RADIO_FLYOUT_DEMO = '1'
-      $env:RADIO_FLYOUT_CLICK = '0'
+      $env:RADIO_FLYOUT_CLICK = '1'
       $env:RADIO_FLYOUT_LOG = Join-Path $env:TEMP 'click.log'
       Remove-Item $env:RADIO_FLYOUT_LOG -ErrorAction SilentlyContinue
       Start-Process -FilePath 'target\release\radio.exe' -WorkingDirectory (Get-Location).Path -Wait
