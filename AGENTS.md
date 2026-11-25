@@ -56,6 +56,16 @@ What the build does before pausing (`appveyor.yml`, `on_finish`):
 - Playback is only truly verified through speakers: a paused worker is the only
   place that can do it, and it needs a human to click the tray icon.
 
+### Clicking a station without a hand
+
+A snapshot cannot show a click, and a message posted at the window would skip
+activation and hit-testing, so the app clicks itself: `RADIO_FLYOUT_DEMO` plus
+`RADIO_FLYOUT_CLICK` opens the panel, clicks a row with the real mouse once per
+listed station, and writes what happened to `RADIO_FLYOUT_LOG`. `on_finish`
+seeds two stations first, so the second click asks for one station while the
+other is playing — switching, the thing a click is for. The log is echoed into
+the build log (`click: ...`), which is where to read it.
+
 ### Seeing the session without asking
 
 The Remote Desktop client's window cannot be captured on macOS, so the worker
