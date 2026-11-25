@@ -301,6 +301,10 @@ Three things to watch for, because they are the parts most likely to need a fix:
 | Sleep/wake recovery | yes | yes, by noticing a turn that arrives late |
 | Title suggested from the stream | yes | yes (same rules, same fallback) |
 | Click track to search YouTube | yes | yes |
+| Click the station already playing | pauses it | same |
+| Find Station plays what it finds | yes, reusing a saved URL | same |
+| Tray icon follows state | waveform / arrow / radio waves | four bars / broken ring / ring |
+| A failure is called out in the header | ⚠︎ prefix | same |
 | Control Center / media keys | `MPNowPlayingInfoCenter` | MPRIS on Linux, SMTC on Windows |
 
 | Width-fitted title | measured | 60-character budget |
