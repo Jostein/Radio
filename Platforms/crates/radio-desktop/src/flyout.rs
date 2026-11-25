@@ -21,7 +21,7 @@ use windows_sys::Win32::Graphics::Dwm::{
 };
 use windows_sys::Win32::Graphics::Gdi::{
     BeginPaint, BitBlt, CreateCompatibleBitmap, CreateCompatibleDC, CreateDIBSection, CreateFontW,
-    CreateSolidBrush, DeleteDC, DeleteObject, DrawTextW, Ellipse, EndPaint, GdiFlush,
+    CreateSolidBrush, DeleteDC, DeleteObject, DrawTextW, Ellipse, EndPaint, FillRect, GdiFlush,
     GetDC, GetStockObject, InvalidateRect, ReleaseDC, RoundRect, SelectObject, SetBkColor, SetBkMode,
     SetTextColor, BITMAPINFO, BITMAPINFOHEADER, BI_RGB, CLEARTYPE_QUALITY, DEFAULT_CHARSET,
     DIB_RGB_COLORS, DT_CENTER, DT_END_ELLIPSIS, DT_LEFT, DT_NOPREFIX, DT_RIGHT, DT_SINGLELINE,
@@ -703,8 +703,13 @@ unsafe fn paint(state: &State, hdc: HDC) {
     let bitmap = CreateCompatibleBitmap(hdc, width, height);
     let previous = SelectObject(memory, bitmap);
 
+    // The window's corners are rounded by the system, which clips away the
+    // pixels beyond its curve — but everything inside that curve is blitted to
+    // the screen as this drawing leaves it, and a corner left alone showed the
+    // bitmap's uninitialised pixels as a light band behind the card. So the
+    // client is filled edge to edge and the card sits inside it.
     let theme = &state.theme;
-    rounded(memory, client, 8, theme.border);
+    fill(memory, client, theme.border);
     rounded(
         memory,
         RECT {
@@ -888,6 +893,12 @@ unsafe fn draw_text(hdc: HDC, font: HFONT, color: u32, mut rect: RECT, text: &st
         align | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS | DT_NOPREFIX,
     );
     SelectObject(hdc, previous);
+}
+
+unsafe fn fill(hdc: HDC, rect: RECT, color: u32) {
+    let brush = CreateSolidBrush(color);
+    FillRect(hdc, &rect, brush);
+    DeleteObject(brush);
 }
 
 unsafe fn rounded(hdc: HDC, rect: RECT, radius: i32, color: u32) {
