@@ -73,6 +73,20 @@ on_finish:
       } else {
         $endpoints | Format-Table FriendlyName, Status -AutoSize | Out-String | Write-Host
       }
+  # The panel's own pixels, drawn off-screen instead of onto the desktop: the
+  # only way to look at the flyout when no hand can open it. The app renders and
+  # exits, so this costs a second and changes nothing else about the build.
+  - ps: |
+      $env:RADIO_FLYOUT_DEMO = '1'
+      $env:RADIO_FLYOUT_SNAPSHOT = Join-Path $env:TEMP 'panel.bmp'
+      & 'target\release\radio.exe'
+      if (Test-Path $env:RADIO_FLYOUT_SNAPSHOT) {
+        & appveyor PushArtifact $env:RADIO_FLYOUT_SNAPSHOT -FileName 'panel.bmp' | Out-Null
+        'panel snapshot uploaded'
+      } else {
+        'no panel snapshot'
+      }
+      Remove-Item Env:RADIO_FLYOUT_DEMO, Env:RADIO_FLYOUT_SNAPSHOT
   # Start the app before pausing. Typing into the session over RDP is unreliable
   # (the worker's keymap mangles punctuation, and keystrokes land wherever focus
   # is on the client), so the tray icon has to be there on arrival: log in and

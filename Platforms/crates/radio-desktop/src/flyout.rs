@@ -37,15 +37,16 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
     SystemParametersInfoW, CS_DROPSHADOW, ES_AUTOHSCROLL, ES_LEFT, GWLP_USERDATA, GWLP_WNDPROC,
     HWND_TOPMOST, SPI_GETWORKAREA, SWP_NOACTIVATE, SWP_NOZORDER, SWP_SHOWWINDOW, SW_HIDE, SW_SHOW,
     WA_INACTIVE, WM_ACTIVATE, WM_CHAR, WM_COMMAND, WM_CTLCOLOREDIT, WM_ERASEBKGND, WM_KEYDOWN,
-    WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_PAINT, WM_SETFONT, WNDCLASSW,
+    WM_KILLFOCUS, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_PAINT, WM_SETFOCUS,
+    WM_SETFONT, WNDCLASSW,
     WS_CHILD, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP, WS_VISIBLE,
 };
 
-const WIDTH: i32 = 300;
-const PAD: i32 = 12;
-const ROW_HEIGHT: i32 = 28;
+const WIDTH: i32 = 320;
+const PAD: i32 = 14;
+const ROW_HEIGHT: i32 = 32;
 const VISIBLE_ROWS: usize = 7;
-const FIELD_HEIGHT: i32 = 30;
+const FIELD_HEIGHT: i32 = 32;
 const EDIT_ID: i32 = 200;
 const EM_SETCUEBANNER: u32 = 0x1501;
 const EN_CHANGE: u16 = 0x0300;
@@ -102,20 +103,43 @@ struct Theme {
 }
 
 impl Theme {
+    /// Windows 11's Fluent surfaces. The dark values are the ones a WinUI
+    /// flyout uses (its background is #2C2C2C over Mica); light mode flips to
+    /// the near-white card Windows uses there.
     unsafe fn detect() -> Theme {
         let dark = apps_use_dark_mode();
-        let field = if dark { 0x002B2B2B } else { 0x00F4F4F4 };
+        let field = if dark { 0x00323232 } else { 0x00FFFFFF };
         Theme {
-            background: if dark { 0x00202020 } else { 0x00FFFFFF },
-            text: if dark { 0x00F0F0F0 } else { 0x00141414 },
-            dim: if dark { 0x00A0A0A0 } else { 0x00666666 },
+            background: if dark { 0x002C2C2C } else { 0x00F9F9F9 },
+            text: if dark { 0x00FFFFFF } else { 0x001B1B1B },
+            dim: if dark { 0x00A5A5A5 } else { 0x00616161 },
             field,
-            border: if dark { 0x00383838 } else { 0x00DFDFDF },
-            // #3B82F6, the tray icon's blue, as Windows stores it: 0x00BBGGRR.
-            accent: 0x00F6823B,
-            hover: if dark { 0x002A2A2A } else { 0x00F2F2F2 },
+            border: if dark { 0x003D3D3D } else { 0x00D6D6D6 },
+            accent: accent_color(),
+            hover: if dark { 0x00363636 } else { 0x00EDEDED },
             field_brush: CreateSolidBrush(field) as usize,
         }
+    }
+}
+
+/// The accent colour Windows 11 paints selection, focus and sliders with.
+unsafe fn accent_color() -> u32 {
+    let mut value: u32 = 0;
+    let mut size = std::mem::size_of::<u32>() as u32;
+    let status = RegGetValueW(
+        HKEY_CURRENT_USER,
+        wide("Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Accent").as_ptr(),
+        wide("AccentColorMenu").as_ptr(),
+        RRF_RT_REG_DWORD,
+        std::ptr::null_mut(),
+        &mut value as *mut u32 as *mut core::ffi::c_void,
+        &mut size,
+    );
+    // Stored ABGR, whose low three bytes are exactly the COLORREF we draw with.
+    if status == 0 && value & 0x00FF_FFFF != 0 {
+        value & 0x00FF_FFFF
+    } else {
+        0x00D4_7800 // #0078D4, Windows' blue, when no accent has been chosen.
     }
 }
 
@@ -129,6 +153,7 @@ struct State {
     scroll: usize,
     hover: Option<usize>,
     dragging: bool,
+    field_focused: bool,
     actions: Vec<Action>,
     font: HFONT,
     font_strong: HFONT,
@@ -256,6 +281,7 @@ impl Panel {
                 scroll: 0,
                 hover: None,
                 dragging: false,
+                field_focused: false,
                 actions: Vec::new(),
                 font: std::ptr::null_mut(),
                 font_strong: std::ptr::null_mut(),
@@ -272,7 +298,7 @@ impl Panel {
             SetWindowLongPtrW(edit, GWLP_USERDATA, pointer as isize);
 
             make_fonts(state);
-            SendMessageW(edit, WM_SETFONT, state.font_small as usize, 1);
+            SendMessageW(edit, WM_SETFONT, state.font as usize, 1);
             let cue = wide("Search stations");
             SendMessageW(edit, EM_SETCUEBANNER, 1, cue.as_ptr() as isize);
 
@@ -542,9 +568,9 @@ fn layout_for(state: &State) -> Layout {
         left: PAD,
         top: y,
         right: WIDTH - PAD,
-        bottom: y + 16,
+        bottom: y + 24,
     };
-    y += 16 + 12;
+    y += 24 + 8;
 
     let field = RECT {
         left: PAD,
@@ -601,7 +627,18 @@ unsafe fn paint(state: &State, hdc: HDC) {
     let previous = SelectObject(memory, bitmap);
 
     let theme = &state.theme;
-    fill(memory, client, theme.background);
+    rounded(memory, client, 8, theme.border);
+    rounded(
+        memory,
+        RECT {
+            left: client.left + 1,
+            top: client.top + 1,
+            right: client.right - 1,
+            bottom: client.bottom - 1,
+        },
+        8,
+        theme.background,
+    );
 
     let layout = layout_for(state);
 
@@ -673,11 +710,16 @@ unsafe fn paint(state: &State, hdc: HDC) {
         );
     }
     let thumb_y = layout.slider.top + (layout.slider.bottom - layout.slider.top) / 2;
-    disc(memory, rail.left + reach, thumb_y, 6, theme.accent);
+    disc(memory, rail.left + reach, thumb_y, 8, theme.accent);
 
     // Search field: our own rounded box with the borderless EDIT control inset
     // inside it, so the control's background sits on the drawn field.
-    outline(memory, layout.field, 8, theme.border, theme.field);
+    let field_edge = if state.field_focused {
+        theme.accent
+    } else {
+        theme.border
+    };
+    outline(memory, layout.field, 4, field_edge, theme.field);
 
     let filtered = state.filtered();
     if filtered.is_empty() {
@@ -716,20 +758,20 @@ unsafe fn paint(state: &State, hdc: HDC) {
 
         let current = state.content.current.as_deref() == Some(row.id.as_str());
         if state.hover == Some(index) {
-            rounded(memory, area, 6, theme.hover);
+            rounded(memory, area, 4, theme.hover);
         }
         if current {
             let marker = RECT {
-                left: PAD / 2 + 4,
-                top: top + 8,
-                right: PAD / 2 + 7,
-                bottom: top + ROW_HEIGHT - 8,
+                left: area.left + 5,
+                top: top + 10,
+                right: area.left + 8,
+                bottom: top + ROW_HEIGHT - 10,
             };
             rounded(memory, marker, 2, theme.accent);
         }
 
         let text = RECT {
-            left: area.left + 12,
+            left: area.left + 16,
             right: area.right - 8,
             ..area
         };
@@ -836,8 +878,8 @@ unsafe fn make_fonts(state: &mut State) {
             DeleteObject(font);
         }
     }
-    state.font = font(13, 400);
-    state.font_strong = font(13, 600);
+    state.font = font(14, 400);
+    state.font_strong = font(14, 600);
     state.font_small = font(12, 400);
 }
 
@@ -997,6 +1039,10 @@ unsafe extern "system" fn edit_proc(
                 lparam,
             );
             return 0;
+        }
+        WM_SETFOCUS | WM_KILLFOCUS => {
+            state.field_focused = message == WM_SETFOCUS;
+            state.invalidate();
         }
         WM_KEYDOWN if wparam == VK_ESCAPE => {
             hide(state);
