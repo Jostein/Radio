@@ -101,6 +101,25 @@ on_finish:
       Save-Panel 'panel-dark.bmp'
       if ($null -ne $wasLight) { Set-ItemProperty $personalise -Name AppsUseLightTheme -Value $wasLight }
       Remove-Item Env:RADIO_FLYOUT_DEMO, Env:RADIO_FLYOUT_SNAPSHOT
+  # A click is the one thing a snapshot cannot show. The panel is opened, the
+  # app clicks a station row itself with the real mouse, and writes down what it
+  # did; the log is echoed here so the build log carries the answer too.
+  - ps: |
+      $env:RADIO_FLYOUT_DEMO = '1'
+      $env:RADIO_FLYOUT_CLICK = '0'
+      $env:RADIO_FLYOUT_LOG = Join-Path $env:TEMP 'click.log'
+      Remove-Item $env:RADIO_FLYOUT_LOG -ErrorAction SilentlyContinue
+      Start-Process -FilePath 'target\release\radio.exe' -WorkingDirectory (Get-Location).Path -Wait
+      for ($i = 0; $i -lt 60 -and -not (Test-Path $env:RADIO_FLYOUT_LOG); $i++) {
+        Start-Sleep -Milliseconds 250
+      }
+      if (Test-Path $env:RADIO_FLYOUT_LOG) {
+        Get-Content $env:RADIO_FLYOUT_LOG | ForEach-Object { "click: $_" }
+        & appveyor PushArtifact $env:RADIO_FLYOUT_LOG -FileName 'click.log' | Out-Null
+      } else {
+        'no click log: the panel never finished its self-test'
+      }
+      Remove-Item Env:RADIO_FLYOUT_DEMO, Env:RADIO_FLYOUT_CLICK, Env:RADIO_FLYOUT_LOG
   # Start the app before pausing. Typing into the session over RDP is unreliable
   # (the worker's keymap mangles punctuation, and keystrokes land wherever focus
   # is on the client), so the tray icon has to be there on arrival: log in and

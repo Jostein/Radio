@@ -14,7 +14,7 @@
 
 use std::time::{Duration, Instant};
 
-use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, RECT, WPARAM};
+use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, RECT, WPARAM};
 use windows_sys::Win32::Graphics::Dwm::{
     DwmSetWindowAttribute, DWMWA_USE_IMMERSIVE_DARK_MODE, DWMWA_WINDOW_CORNER_PREFERENCE,
     DWMWCP_ROUND,
@@ -29,16 +29,19 @@ use windows_sys::Win32::Graphics::Gdi::{
 };
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows_sys::Win32::System::Registry::{RegGetValueW, HKEY_CURRENT_USER, RRF_RT_REG_DWORD};
-use windows_sys::Win32::UI::Input::KeyboardAndMouse::{ReleaseCapture, SetCapture, SetFocus};
+use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
+    mouse_event, ReleaseCapture, SetCapture, SetFocus, MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP,
+};
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    CallWindowProcW, CreateWindowExW, DefWindowProcW, DestroyWindow, GetClientRect,
-    GetWindowLongPtrW, GetWindowTextLengthW, GetWindowTextW, RegisterClassW, SendMessageW,
-    SetForegroundWindow, SetWindowLongPtrW, SetWindowPos, SetWindowTextW, ShowWindow,
-    SystemParametersInfoW, CS_DROPSHADOW, ES_AUTOHSCROLL, ES_LEFT, GWLP_USERDATA, GWLP_WNDPROC,
-    HWND_TOPMOST, SPI_GETWORKAREA, SWP_NOACTIVATE, SWP_NOZORDER, SWP_SHOWWINDOW, SW_HIDE, SW_SHOW,
-    WA_INACTIVE, WM_ACTIVATE, WM_CHAR, WM_COMMAND, WM_CTLCOLOREDIT, WM_ERASEBKGND, WM_KEYDOWN,
-    WM_KILLFOCUS, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_PAINT, WM_SETFOCUS,
-    WM_SETFONT, WNDCLASSW,
+    CallWindowProcW, CreateWindowExW, DefWindowProcW, DestroyWindow, GetClientRect, GetCursorPos,
+    GetForegroundWindow, GetSystemMetrics, GetWindowLongPtrW, GetWindowRect, GetWindowTextLengthW,
+    GetWindowTextW, RegisterClassW, SendMessageW, SetCursorPos, SetForegroundWindow,
+    SetWindowLongPtrW, SetWindowPos, SetWindowTextW, ShowWindow, SystemParametersInfoW,
+    CS_DROPSHADOW, ES_AUTOHSCROLL,
+    ES_LEFT, GWLP_USERDATA, GWLP_WNDPROC, HWND_TOPMOST, SM_CXSCREEN, SM_CYSCREEN, SPI_GETWORKAREA,
+    SWP_NOACTIVATE, SWP_NOZORDER, SWP_SHOWWINDOW, SW_HIDE, SW_SHOW, WA_INACTIVE, WM_ACTIVATE,
+    WM_CHAR, WM_COMMAND, WM_CTLCOLOREDIT, WM_ERASEBKGND, WM_KEYDOWN, WM_KILLFOCUS, WM_LBUTTONDOWN,
+    WM_LBUTTONUP, WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_PAINT, WM_SETFOCUS, WM_SETFONT, WNDCLASSW,
     WS_CHILD, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP, WS_VISIBLE,
 };
 
@@ -417,6 +420,69 @@ impl Panel {
         }
     }
 
+    /// Where the panel is and what desktop it is on, as one line. Only the
+    /// click self-test reads this: a screenshot is cropped to whatever size the
+    /// worker's screen had when it started, so the numbers are the only way to
+    /// tell a panel that is off-screen from one that is not.
+    pub fn geometry(&self) -> String {
+        let state = self.state();
+        unsafe {
+            let mut rect: RECT = std::mem::zeroed();
+            GetWindowRect(state.hwnd, &mut rect);
+            let [left, top, right, bottom] = work_area();
+            format!(
+                "panel {},{},{},{} work-area {},{},{},{} screen {}x{} foreground {}",
+                rect.left,
+                rect.top,
+                rect.right,
+                rect.bottom,
+                left,
+                top,
+                right,
+                bottom,
+                GetSystemMetrics(SM_CXSCREEN),
+                GetSystemMetrics(SM_CYSCREEN),
+                if GetForegroundWindow() == state.hwnd {
+                    "panel"
+                } else {
+                    "another window"
+                },
+            )
+        }
+    }
+
+    /// Clicks row `index` with the real mouse, which is the only kind of click
+    /// that tells the truth: a message posted at the window skips activation and
+    /// hit-testing, the two things most likely to be wrong. Returns the screen
+    /// point clicked, or `None` when the panel does not show that row.
+    pub fn click_row(&self, index: usize) -> Option<(i32, i32)> {
+        let state = self.state();
+        let layout = layout_for(state);
+        if index >= layout.visible {
+            return None;
+        }
+        unsafe {
+            let mut rect: RECT = std::mem::zeroed();
+            GetWindowRect(state.hwnd, &mut rect);
+            let x = rect.left + WIDTH / 2;
+            let y = rect.top + layout.rows_top + index as i32 * ROW_HEIGHT + ROW_HEIGHT / 2;
+            SetCursorPos(x, y);
+            mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0);
+            mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
+            Some((x, y))
+        }
+    }
+
+    /// Where the real pointer is, so a click that was ignored can be told from
+    /// one that never happened at all.
+    pub fn cursor(&self) -> (i32, i32) {
+        unsafe {
+            let mut point: POINT = std::mem::zeroed();
+            GetCursorPos(&mut point);
+            (point.x, point.y)
+        }
+    }
+
     /// What the user did since the last call.
     pub fn take_actions(&mut self) -> Vec<Action> {
         std::mem::take(&mut self.state().actions)
@@ -482,9 +548,8 @@ unsafe fn hide(state: &mut State) {
     }
 }
 
-/// The bottom-right corner of the work area: where the panel goes when there is
-/// no tray icon rectangle to line up with.
-unsafe fn default_anchor() -> Anchor {
+/// The screen area left for windows: everything but the taskbar.
+unsafe fn work_area() -> [i32; 4] {
     let mut area: RECT = std::mem::zeroed();
     SystemParametersInfoW(
         SPI_GETWORKAREA,
@@ -492,9 +557,16 @@ unsafe fn default_anchor() -> Anchor {
         &mut area as *mut RECT as *mut core::ffi::c_void,
         0,
     );
+    [area.left, area.top, area.right, area.bottom]
+}
+
+/// The bottom-right corner of the work area: where the panel goes when there is
+/// no tray icon rectangle to line up with.
+unsafe fn default_anchor() -> Anchor {
+    let [_, _, right, bottom] = work_area();
     Anchor {
-        x: area.right - 24,
-        y: area.bottom,
+        x: right - 24,
+        y: bottom,
         width: 24,
     }
 }
@@ -502,22 +574,16 @@ unsafe fn default_anchor() -> Anchor {
 /// Above the tray icon when there is room, otherwise just below it, and always
 /// inside the work area.
 unsafe fn place(width: i32, height: i32, anchor: Anchor) -> (i32, i32) {
-    let mut area: RECT = std::mem::zeroed();
-    SystemParametersInfoW(
-        SPI_GETWORKAREA,
-        0,
-        &mut area as *mut RECT as *mut core::ffi::c_void,
-        0,
-    );
+    let [left, top, right, bottom] = work_area();
 
     let mut x = anchor.x + anchor.width - width;
     let mut y = anchor.y - height - 8;
-    if y < area.top {
+    if y < top {
         y = anchor.y + 40;
     }
 
-    x = x.clamp(area.left + 8, (area.right - width - 8).max(area.left + 8));
-    y = y.clamp(area.top + 8, (area.bottom - height - 8).max(area.top + 8));
+    x = x.clamp(left + 8, (right - width - 8).max(left + 8));
+    y = y.clamp(top + 8, (bottom - height - 8).max(top + 8));
     (x, y)
 }
 

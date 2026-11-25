@@ -128,7 +128,7 @@ fn create_host_window() -> Result<isize, String> {
 }
 
 #[cfg(target_os = "windows")]
-fn pump_windows_messages() {
+pub(crate) fn pump_windows_messages() {
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         DispatchMessageW, PeekMessageW, TranslateMessage, MSG, PM_REMOVE,
     };

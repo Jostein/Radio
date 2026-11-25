@@ -111,6 +111,12 @@ impl App {
                 }
                 std::process::exit(0);
             }
+            // A click is the one thing a snapshot cannot show. `RADIO_FLYOUT_CLICK`
+            // clicks a row with the real mouse and writes down what happened.
+            if std::env::var_os("RADIO_FLYOUT_CLICK").is_some() {
+                app.click_self_test();
+                std::process::exit(0);
+            }
         }
 
         Ok(app)
@@ -357,6 +363,81 @@ impl App {
         content.status = crate::player::State::Playing.description();
         content.current = Some(first.id.clone());
         content
+    }
+
+    /// Opens the panel, clicks a station row with the real mouse, and writes
+    /// what the app did about it to `RADIO_FLYOUT_LOG`.
+    ///
+    /// Nobody can click a build worker's tray icon, and a posted message would
+    /// skip the two things that most plausibly break a click — activation and
+    /// hit-testing — so the row is clicked the way a hand would. An empty log
+    /// line is a fact too: it says the pointer could not be moved, which means
+    /// the worker has no interactive desktop rather than a dead panel.
+    #[cfg(target_os = "windows")]
+    fn click_self_test(&mut self) {
+        let index: usize = std::env::var("RADIO_FLYOUT_CLICK")
+            .ok()
+            .and_then(|value| value.parse().ok())
+            .unwrap_or(0);
+        let mut log: Vec<String> = Vec::new();
+
+        self.turn(6);
+        if let Some(panel) = self.panel.as_ref() {
+            log.push(panel.geometry());
+            log.push(format!("open before: {}", panel.is_open()));
+            log.push(format!("cursor before: {:?}", panel.cursor()));
+        }
+        log.push(format!("state before: {}", self.describe()));
+
+        let point = self.panel.as_ref().and_then(|panel| panel.click_row(index));
+        log.push(match point {
+            Some((x, y)) => format!("clicked row {index} at {x},{y}"),
+            None => format!("row {index} is not shown"),
+        });
+        if let Some(panel) = self.panel.as_ref() {
+            log.push(format!("cursor after: {:?}", panel.cursor()));
+        }
+
+        self.turn(5);
+        log.push(format!("state after 0.2s: {}", self.describe()));
+        let open = self.panel.as_ref().map(|panel| panel.is_open()).unwrap_or(false);
+        log.push(format!("open after: {open}"));
+
+        self.turn(50);
+        log.push(format!("state after 2s: {}", self.describe()));
+
+        for line in &log {
+            eprintln!("radio: click: {line}");
+        }
+        if let Some(path) = std::env::var_os("RADIO_FLYOUT_LOG") {
+            let _ = std::fs::write(path, format!("{}\n", log.join("\n")));
+        }
+    }
+
+    /// A few turns of the app loop, messages included, without waiting for the
+    /// loop in `platform` (the self-test runs before it starts).
+    #[cfg(target_os = "windows")]
+    fn turn(&mut self, count: usize) {
+        for _ in 0..count {
+            self.pump();
+            crate::platform::pump_windows_messages();
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    }
+
+    /// One line describing what a listener sees.
+    #[cfg(target_os = "windows")]
+    fn describe(&self) -> String {
+        let station = self
+            .player
+            .current
+            .as_ref()
+            .map(|station| station.title.clone())
+            .unwrap_or_else(|| "(nothing)".to_string());
+        match self.player.title.as_deref() {
+            Some(track) => format!("{station} — {} — {track}", self.player.state.description()),
+            None => format!("{station} — {}", self.player.state.description()),
+        }
     }
 
     fn open_track_search(&self) {
