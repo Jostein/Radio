@@ -813,12 +813,6 @@ unsafe fn draw_text(hdc: HDC, font: HFONT, color: u32, mut rect: RECT, text: &st
     SelectObject(hdc, previous);
 }
 
-unsafe fn fill(hdc: HDC, rect: RECT, color: u32) {
-    let brush = CreateSolidBrush(color);
-    FillRect(hdc, &rect, brush);
-    DeleteObject(brush);
-}
-
 unsafe fn rounded(hdc: HDC, rect: RECT, radius: i32, color: u32) {
     let brush = CreateSolidBrush(color);
     let previous = SelectObject(hdc, brush);

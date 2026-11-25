@@ -79,7 +79,13 @@ on_finish:
   - ps: |
       $env:RADIO_FLYOUT_DEMO = '1'
       $env:RADIO_FLYOUT_SNAPSHOT = Join-Path $env:TEMP 'panel.bmp'
-      & 'target\release\radio.exe'
+      Remove-Item $env:RADIO_FLYOUT_SNAPSHOT -ErrorAction SilentlyContinue
+      # The binary is GUI-subsystem now, so calling it with & returns at once and
+      # the file was tested for before it existed.
+      Start-Process -FilePath 'target\release\radio.exe' -WorkingDirectory (Get-Location).Path -Wait
+      for ($i = 0; $i -lt 20 -and -not (Test-Path $env:RADIO_FLYOUT_SNAPSHOT); $i++) {
+        Start-Sleep -Milliseconds 250
+      }
       if (Test-Path $env:RADIO_FLYOUT_SNAPSHOT) {
         & appveyor PushArtifact $env:RADIO_FLYOUT_SNAPSHOT -FileName 'panel.bmp' | Out-Null
         'panel snapshot uploaded'
