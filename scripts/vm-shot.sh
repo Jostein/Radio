@@ -9,7 +9,7 @@ AUTH="Authorization: Bearer $(tr -d '\r\n' < .appveyor-token)"
 
 read -r job version <<<"$(curl -sf -H "$AUTH" "$API/projects/Jostein/radio/history?recordsNumber=10" |
   python3 -c 'import json,sys
-b=[x for x in json.load(sys.stdin)["builds"] if x["status"] == "running"]
+b=[x for x in json.load(sys.stdin)["builds"] if x["status"] == "running" and x["jobs"]]
 print(b[0]["jobs"][0]["jobId"], b[0]["version"]) if b else print("", "")')"
 
 if [ -z "${job:-}" ]; then
@@ -29,6 +29,8 @@ if [ -z "$name" ]; then
 fi
 
 mkdir -p .rdp
-curl -sf -H "$AUTH" "$API/buildjobs/$job/artifacts/$name" -o .rdp/vm-live.png
+# The artifact endpoint answers 302 and signs a storage URL; without -L the
+# file arrives empty.
+curl -sfL -H "$AUTH" "$API/buildjobs/$job/artifacts/$name" -o .rdp/vm-live.png
 sips -s format jpeg -s formatOptions 88 .rdp/vm-live.png --out .rdp/vm-live.jpg >/dev/null
 echo "build $version, $name -> .rdp/vm-live.jpg"
