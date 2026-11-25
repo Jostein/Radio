@@ -1,4 +1,4 @@
-use crate::player::Player;
+use crate::player::{Player, State};
 use radio_core::store::Store;
 use radio_core::title;
 use tray_icon::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
@@ -121,7 +121,10 @@ pub fn build(store: &Store, player: &Player) -> Built {
 
 pub fn header_text(player: &Player) -> String {
     match &player.current {
-        Some(station) => format!("{} — {}", station.title, player.state.description()),
+        Some(station) => match &player.state {
+            State::Failed(message) => format!("⚠︎ {}: {message}", station.title),
+            state => format!("{} — {}", station.title, state.description()),
+        },
         None => player.state.description(),
     }
 }

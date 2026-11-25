@@ -1,7 +1,7 @@
 use crate::icon;
 use crate::media::{self, Controls, Snapshot};
 use crate::menu::{self, Handles};
-use crate::player::Player;
+use crate::player::{Player, State};
 use radio_core::{search, store::Store};
 use std::time::{Duration, Instant, SystemTime};
 use tray_icon::menu::MenuEvent;
@@ -22,6 +22,7 @@ pub struct App {
     last_toggle: String,
     last_volume: String,
     last_tooltip: String,
+    last_look: icon::Look,
     last_current: Option<String>,
     saved_mtime: Option<SystemTime>,
     last_file_check: Instant,
@@ -41,7 +42,7 @@ impl App {
         let builder = tray_icon::TrayIconBuilder::new()
             .with_menu(Box::new(built.menu))
             .with_tooltip("Radio")
-            .with_icon(icon::tray_icon()?);
+            .with_icon(icon::tray_icon(icon::Look::Idle)?);
         // On Windows a left click opens the flyout and the right button opens
         // this menu; the crate shows the menu on right click either way. The
         // other platforms keep the menu on both, so they are left alone.
@@ -76,6 +77,7 @@ impl App {
             last_toggle: String::new(),
             last_volume: String::new(),
             last_tooltip: String::new(),
+            last_look: icon::Look::Idle,
             last_current: None,
             saved_mtime,
             last_file_check: Instant::now(),
@@ -161,8 +163,20 @@ impl App {
                     // must not restart what is playing.
                     self.last_tick = SystemTime::now();
                     if let Some(station) = answer {
-                        self.store.add(station);
-                        self.rebuild();
+                        let known = self
+                            .store
+                            .stations
+                            .iter()
+                            .find(|saved| saved.url_string == station.url_string)
+                            .cloned();
+                        match known {
+                            Some(saved) => self.player.play(saved),
+                            None => {
+                                self.store.add(station.clone());
+                                self.rebuild();
+                                self.player.play(station);
+                            }
+                        }
                     }
                 }
                 #[cfg(target_os = "windows")]
@@ -188,7 +202,12 @@ impl App {
                 other => {
                     if let Some(station_id) = other.strip_prefix("play:") {
                         if let Some(station) = self.store.station(station_id).cloned() {
-                            self.player.play(station);
+                            let current = self.player.current.as_ref().map(|s| s.id.as_str());
+                            if current == Some(station.id.as_str()) {
+                                self.player.toggle();
+                            } else {
+                                self.player.play(station);
+                            }
                         }
                     } else if let Some(station_id) = other.strip_prefix("remove:") {
                         if self.store.remove(station_id) {
@@ -275,7 +294,12 @@ impl App {
             match action {
                 crate::flyout::Action::Play(id) => {
                     if let Some(station) = self.store.station(&id).cloned() {
-                        self.player.play(station);
+                        let current = self.player.current.as_ref().map(|s| s.id.as_str());
+                        if current == Some(station.id.as_str()) {
+                            self.player.toggle();
+                        } else {
+                            self.player.play(station);
+                        }
                     }
                 }
                 crate::flyout::Action::Toggle => self.player.toggle(),
@@ -388,6 +412,18 @@ impl App {
             (Some(station), None) => format!("Radio — {} — {}", station.title, self.player.state.description()),
             _ => "Radio".to_string(),
         };
+        let look = match self.player.state {
+            State::Connecting | State::Playing => icon::Look::Playing,
+            State::Reconnecting(_) => icon::Look::Reconnecting,
+            State::Idle | State::Paused | State::Failed(_) => icon::Look::Idle,
+        };
+        if look != self.last_look {
+            if let Ok(drawn) = icon::tray_icon(look) {
+                let _ = self.tray.set_icon(Some(drawn));
+            }
+            self.last_look = look;
+        }
+
         if tooltip != self.last_tooltip {
             let _ = self.tray.set_tooltip(Some(tooltip.clone()));
             self.last_tooltip = tooltip;
