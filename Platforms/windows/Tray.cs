@@ -17,6 +17,7 @@ internal sealed class Tray : IDisposable
     private const uint NIF_MESSAGE = 0x01;
     private const uint NIF_ICON = 0x02;
     private const uint NIF_TIP = 0x04;
+    private const uint NIF_GUID = 0x20;
     private const uint IMAGE_ICON = 1;
     private const uint LR_LOADFROMFILE = 0x0010;
     private const int SM_CXSMICON = 49;
@@ -30,6 +31,12 @@ internal sealed class Tray : IDisposable
     private const int WM_RBUTTONUP = 0x0205;
 
     private static readonly IntPtr HwndMessage = new(-3);
+    /// <summary>
+    /// A GUID is how Windows will say where the icon ended up: the tray
+    /// rearranges itself as icons come and go, so a remembered position is
+    /// wrong by the time the next click happens.
+    /// </summary>
+    private static readonly Guid IconGuid = new("83a2f0b3-7f61-4f37-9d5c-3f2c0e5a71bd");
 
     private readonly WndProc proc;
     private IntPtr window;
@@ -148,11 +155,32 @@ internal sealed class Tray : IDisposable
         cbSize = (uint)Marshal.SizeOf<NOTIFYICONDATAW>(),
         hWnd = window,
         uID = 1,
-        uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP,
+        uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP | NIF_GUID,
         uCallbackMessage = CallbackMessage,
         hIcon = icon,
         szTip = "Radio",
+        guidItem = IconGuid,
     };
+
+    /// <summary>Where the icon is on screen, or null when the tray will not say.</summary>
+    public Windows.Graphics.RectInt32? Bounds()
+    {
+        if (window == IntPtr.Zero)
+        {
+            return null;
+        }
+
+        var identity = new NOTIFYICONIDENTIFIER
+        {
+            cbSize = (uint)Marshal.SizeOf<NOTIFYICONIDENTIFIER>(),
+            hWnd = window,
+            uID = 1,
+            guidItem = IconGuid,
+        };
+        return Shell_NotifyIconGetRect(ref identity, out var rect) == 0
+            ? new Windows.Graphics.RectInt32(rect.Left, rect.Top, rect.Right - rect.Left, rect.Bottom - rect.Top)
+            : null;
+    }
 
     private static string IconPath()
     {
@@ -209,6 +237,27 @@ internal sealed class Tray : IDisposable
         public int X;
         public int Y;
     }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct RECT
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NOTIFYICONIDENTIFIER
+    {
+        public uint cbSize;
+        public IntPtr hWnd;
+        public uint uID;
+        public Guid guidItem;
+    }
+
+    [DllImport("shell32.dll")]
+    private static extern int Shell_NotifyIconGetRect(ref NOTIFYICONIDENTIFIER identity, out RECT rect);
 
     [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
     private static extern bool Shell_NotifyIconW(uint message, ref NOTIFYICONDATAW data);

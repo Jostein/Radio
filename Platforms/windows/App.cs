@@ -49,6 +49,7 @@ public partial class App : Application
         tray = new Tray();
         tray.LeftClick = () => flyout.Toggle();
         tray.Install(Quit);
+        flyout.Anchor = tray.Bounds;
 
         // The same hook the Rust port uses on the build worker: open the panel
         // without a hand, so a session with no tray in reach can be looked at.

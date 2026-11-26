@@ -42,6 +42,9 @@ Checked in the Parallels Windows 11 VM (26100, 200% scaling):
 - the tray icon registers and survives an Explorer restart;
 - the panel draws as a Fluent card: station row, volume slider, accent
   play button and Add Station, correct size at 200% scaling;
+- it drops from the tray icon (`Shell_NotifyIconGetRect`, so the icon is found
+  wherever the tray put it) and falls back to the work area's bottom-right corner
+  when the tray will not say;
 - clicking a station starts the FIP Reggae HLS stream in `MediaPlayer`, the
   button turns into Pause, the row shows the playing marker and the status reads
   `Live`; the taskbar shows the media controls.

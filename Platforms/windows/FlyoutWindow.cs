@@ -44,6 +44,9 @@ internal sealed class FlyoutWindow
     /// <summary>Set by the demo hook, where nothing has focus to keep the panel up.</summary>
     private bool pinned;
 
+    /// <summary>Where the tray icon is, so the panel can drop from it.</summary>
+    public Func<RectInt32?>? Anchor { get; set; }
+
     public FlyoutWindow(Stations stations, Player player)
     {
         this.stations = stations;
@@ -77,7 +80,6 @@ internal sealed class FlyoutWindow
             return;
         }
 
-        App.Log("toggle visible=" + window.AppWindow.IsVisible);
         if (window.AppWindow.IsVisible)
         {
             Hide();
@@ -96,13 +98,11 @@ internal sealed class FlyoutWindow
 
     private void Show()
     {
-        App.Log("show");
         Place();
         shownAt = DateTime.UtcNow;
         window.AppWindow.Show();
         SetForegroundWindow(WinRT.Interop.WindowNative.GetWindowHandle(window));
         window.Activate();
-        App.Log("shown visible=" + window.AppWindow.IsVisible);
     }
 
     [System.Runtime.InteropServices.DllImport("user32.dll")]
@@ -115,7 +115,6 @@ internal sealed class FlyoutWindow
             return;
         }
 
-        App.Log("hide");
         hiddenAt = DateTime.UtcNow;
         stations.SaveVolume();
         window.AppWindow.Hide();
@@ -123,7 +122,10 @@ internal sealed class FlyoutWindow
 
     private void Place()
     {
-        var area = DisplayArea.Primary.WorkArea;
+        // The click that opened the panel came from the tray, so the cursor is
+        // on the monitor whose tray icon this is — which is where the panel
+        // belongs, even when the taskbar is not on the primary display.
+        var area = WorkAreaAtCursor();
         var rows = Math.Max(1, Math.Min(stations.Items.Count, VisibleRows));
 
         // MoveAndResize speaks pixels and the layout speaks points, so the window
@@ -136,15 +138,36 @@ internal sealed class FlyoutWindow
 
         var x = area.X + area.Width - width - inset;
         var y = area.Y + area.Height - height - inset;
-        if (pinned)
+
+        // Sit over the icon itself, the way the volume and battery flyouts do,
+        // rather than in whichever corner the tray happens to share.
+        if (Anchor?.Invoke() is { } icon)
         {
-            // The demo has no tray in reach; park it where the capture can see it.
-            x = area.X + area.Width / 4;
-            y = area.Y + 80;
+            x = Math.Min(icon.X + icon.Width - width, area.X + area.Width - width);
+            y = Math.Max(icon.Y - height - (int)Math.Round(8 * scale), area.Y);
         }
 
         window.AppWindow.MoveAndResize(new RectInt32(x, y, width, height));
     }
+
+    private static RectInt32 WorkAreaAtCursor()
+    {
+        GetCursorPos(out var point);
+        var display = DisplayArea.GetFromPoint(
+            new PointInt32(point.X, point.Y),
+            DisplayAreaFallback.Primary);
+        return display.WorkArea;
+    }
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct POINT
+    {
+        public int X;
+        public int Y;
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool GetCursorPos(out POINT point);
 
     private double Dpi()
     {
