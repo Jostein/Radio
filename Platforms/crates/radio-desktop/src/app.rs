@@ -482,6 +482,12 @@ impl App {
 
             self.turn(50);
             log.push(format!("  after 2s: {}", self.describe()));
+            // After the click closed the panel, the drawn cost should be gone:
+            // this is the reading that says whether it fell back to the idle
+            // window instead of holding the paint buffers.
+            if let Some(mb) = working_set_mb() {
+                log.push(format!("memory: {mb:.1} MB (panel closed after use)"));
+            }
         }
 
         for line in &log {
