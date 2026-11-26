@@ -447,9 +447,7 @@ impl App {
             log.push(panel.geometry());
             log.push(format!("stations: [{}]", panel.stations()));
         }
-        if let Some(mb) = working_set_mb() {
-            log.push(format!("memory: {mb:.1} MB (panel closed)"));
-        }
+        log.push(memory_line("panel closed", false));
         log.push(format!("before: {}", self.describe()));
 
         for index in [0usize, 1] {
@@ -461,9 +459,7 @@ impl App {
                     panel.demo(content);
                 }
                 self.turn(4);
-                if let Some(mb) = working_set_mb() {
-                    log.push(format!("memory: {mb:.1} MB (panel open)"));
-                }
+                log.push(memory_line("panel open", false));
             }
 
             let point = self.panel.as_ref().and_then(|panel| panel.click_row(index));
@@ -485,9 +481,11 @@ impl App {
             // After the click closed the panel, the drawn cost should be gone:
             // this is the reading that says whether it fell back to the idle
             // window instead of holding the paint buffers.
-            if let Some(mb) = working_set_mb() {
-                log.push(format!("memory: {mb:.1} MB (panel closed after use)"));
-            }
+            log.push(memory_line("panel closed after use", false));
+            // Trimmed: EmptyWorkingSet drops free-but-resident pages, so this
+            // read says whether the panel actually holds the memory or Windows
+            // simply had not trimmed it yet.
+            log.push(memory_line("panel closed after use, trimmed", true));
         }
 
         for line in &log {
@@ -629,26 +627,34 @@ impl App {
     }
 }
 
-/// Working set of this process in megabytes, via the Win32 process-status API.
-/// Used by the click self-test so a build log can show what the flyout costs.
+/// Working set and private committed bytes of this process, via the Win32
+/// process-status API. `trim` calls EmptyWorkingSet first, so freed-but-resident
+/// pages are dropped and only pages the process actually holds remain. Used by
+/// the click self-test so a build log can show what the flyout costs at rest.
 #[cfg(target_os = "windows")]
-fn working_set_mb() -> Option<f64> {
+fn memory_line(label: &str, trim: bool) -> String {
     use windows_sys::Win32::System::ProcessStatus::{
-        GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS,
+        EmptyWorkingSet, GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS,
     };
     use windows_sys::Win32::System::Threading::GetCurrentProcess;
     unsafe {
+        let process = GetCurrentProcess();
+        if trim {
+            EmptyWorkingSet(process);
+        }
         let mut pmc: PROCESS_MEMORY_COUNTERS = std::mem::zeroed();
         pmc.cb = std::mem::size_of::<PROCESS_MEMORY_COUNTERS>() as u32;
         let ok = GetProcessMemoryInfo(
-            GetCurrentProcess(),
-            &mut pmc as *mut _ as *mut windows_sys::Win32::System::ProcessStatus::PROCESS_MEMORY_COUNTERS,
+            process,
+            &mut pmc as *mut _ as *mut PROCESS_MEMORY_COUNTERS,
             std::mem::size_of::<PROCESS_MEMORY_COUNTERS>() as u32,
         );
         if ok != 0 {
-            Some(pmc.WorkingSetSize as f64 / (1024.0 * 1024.0))
+            let working = pmc.WorkingSetSize as f64 / (1024.0 * 1024.0);
+            let committed = pmc.PagefileUsage as f64 / (1024.0 * 1024.0);
+            format!("memory: {working:.1} MB working, {committed:.1} MB committed ({label})")
         } else {
-            None
+            format!("memory: unavailable ({label})")
         }
     }
 }
