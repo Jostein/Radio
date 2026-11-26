@@ -47,6 +47,7 @@ internal sealed class Stations
     };
 
     private readonly string directory;
+    private bool hintShown;
 
     public List<Station> Items { get; private set; } = new();
 
@@ -114,11 +115,29 @@ internal sealed class Stations
         try
         {
             Directory.CreateDirectory(directory);
-            File.WriteAllText(SettingsFile, JsonSerializer.Serialize(new Settings { Volume = Volume }, Json));
+            File.WriteAllText(SettingsFile, JsonSerializer.Serialize(
+                new Settings { Volume = Volume, TrayHintShown = hintShown }, Json));
         }
         catch
         {
         }
+    }
+
+    /// <summary>
+    /// True once, the first time the app runs: an icon from a new app always
+    /// starts in the tray overflow, and only the user may promote it, so this is
+    /// the one thing the app can do about it — say where the switch is.
+    /// </summary>
+    public bool AskTrayHint()
+    {
+        if (hintShown)
+        {
+            return false;
+        }
+
+        hintShown = true;
+        SaveVolume();
+        return true;
     }
 
     private void LoadSettings()
@@ -129,6 +148,7 @@ internal sealed class Stations
             if (settings is not null)
             {
                 Volume = Math.Clamp(settings.Volume, 0.0, 1.0);
+                hintShown = settings.TrayHintShown;
             }
         }
         catch
@@ -146,5 +166,8 @@ internal sealed class Stations
     {
         [JsonPropertyName("volume")]
         public double Volume { get; set; } = 1.0;
+
+        [JsonPropertyName("trayHintShown")]
+        public bool TrayHintShown { get; set; }
     }
 }

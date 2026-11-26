@@ -42,6 +42,9 @@ Checked in the Parallels Windows 11 VM (26100, 200% scaling):
 - the tray icon registers and survives an Explorer restart;
 - the panel draws as a Fluent card: station row, volume slider, accent
   play button and Add Station, correct size at 200% scaling;
+- on first run only, it says where the tray switch is (a notification off the
+  icon; clicking it opens Taskbar settings), because a new icon always starts
+  in the overflow and only the user may promote it — verified in the VM;
 - it drops from the tray icon (`Shell_NotifyIconGetRect`, so the icon is found
   wherever the tray put it) and falls back to the work area's bottom-right corner
   when the tray will not say;

@@ -51,6 +51,14 @@ public partial class App : Application
         tray.Install(Quit);
         flyout.Anchor = tray.Bounds;
 
+        if (stations.AskTrayHint())
+        {
+            // Give the shell a moment to settle before it has to draw something.
+            _ = Task.Delay(2000).ContinueWith(_ => tray.Hint(
+                "Radio is in the tray overflow",
+                "Click here, then turn on Radio in Taskbar settings to keep it next to the clock."));
+        }
+
         // The same hook the Rust port uses on the build worker: open the panel
         // without a hand, so a session with no tray in reach can be looked at.
         if (Environment.GetEnvironmentVariable("RADIO_FLYOUT_DEMO") is { Length: > 0 })

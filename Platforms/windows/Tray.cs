@@ -13,11 +13,14 @@ internal sealed class Tray : IDisposable
     private const int WM_APP = 0x8000;
     private const int CallbackMessage = WM_APP + 21;
     private const uint NIM_ADD = 0;
+    private const uint NIM_MODIFY = 1;
     private const uint NIM_DELETE = 2;
     private const uint NIF_MESSAGE = 0x01;
     private const uint NIF_ICON = 0x02;
     private const uint NIF_TIP = 0x04;
     private const uint NIF_GUID = 0x20;
+    private const uint NIF_INFO = 0x10;
+    private const uint NIIF_INFO = 0x1;
     private const uint IMAGE_ICON = 1;
     private const uint LR_LOADFROMFILE = 0x0010;
     private const int SM_CXSMICON = 49;
@@ -29,6 +32,7 @@ internal sealed class Tray : IDisposable
     private const uint TPM_RETURNCMD = 0x0100;
     private const int WM_LBUTTONUP = 0x0202;
     private const int WM_RBUTTONUP = 0x0205;
+    private const int NIN_BALLOONUSERCLICK = 0x0405;
 
     private static readonly IntPtr HwndMessage = new(-3);
     /// <summary>
@@ -105,6 +109,29 @@ internal sealed class Tray : IDisposable
         }
     }
 
+    /// <summary>
+    /// Say something once. The shell turns this into a notification; clicking it
+    /// opens Taskbar settings, which is where the overflow switch lives.
+    /// </summary>
+    public void Hint(string title, string text)
+    {
+        if (window == IntPtr.Zero)
+        {
+            return;
+        }
+
+        var data = Data();
+        data.uFlags = NIF_GUID | NIF_INFO;
+        data.szInfoTitle = title;
+        data.szInfo = text;
+        data.dwInfoFlags = NIIF_INFO;
+        data.uTimeoutOrVersion = 10000;
+        Shell_NotifyIconW(NIM_MODIFY, ref data);
+
+        // The marker is written before the hint is shown, so a shell that refuses
+        // it does not bring it back on every start.
+    }
+
     public void Dispose()
     {
         if (window == IntPtr.Zero)
@@ -136,6 +163,11 @@ internal sealed class Tray : IDisposable
             if (mouse == WM_RBUTTONUP)
             {
                 ShowMenu();
+                return IntPtr.Zero;
+            }
+            if (mouse == NIN_BALLOONUSERCLICK)
+            {
+                OpenTaskbarSettings();
                 return IntPtr.Zero;
             }
         }
@@ -180,6 +212,22 @@ internal sealed class Tray : IDisposable
         return Shell_NotifyIconGetRect(ref identity, out var rect) == 0
             ? new Windows.Graphics.RectInt32(rect.Left, rect.Top, rect.Right - rect.Left, rect.Bottom - rect.Top)
             : null;
+    }
+
+    private static void OpenTaskbarSettings()
+    {
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "ms-settings:taskbar",
+                UseShellExecute = true,
+            });
+        }
+        catch
+        {
+            // A locked-down shell may not have a settings protocol; nothing to do.
+        }
     }
 
     private static string IconPath()
