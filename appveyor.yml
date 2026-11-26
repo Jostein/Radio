@@ -116,27 +116,20 @@ on_finish:
 
       $env:RADIO_FLYOUT_DEMO = '1'
       $env:RADIO_FLYOUT_CLICK = '1'
-      # Two runs: one with the flyout, one with RADIO_NO_FLYOUT so the log carries
-      # a Win32-menu-only working set to compare against the panel's.
-      function Run-Self($name, $noFlyout) {
-        $env:RADIO_FLYOUT_LOG = Join-Path $env:TEMP $name
-        Remove-Item $env:RADIO_FLYOUT_LOG -ErrorAction SilentlyContinue
-        if ($noFlyout) { $env:RADIO_NO_FLYOUT = '1' } else { Remove-Item Env:RADIO_NO_FLYOUT -ErrorAction SilentlyContinue }
-        Start-Process -FilePath 'target\release\radio.exe' -WorkingDirectory (Get-Location).Path -Wait
-        for ($i = 0; $i -lt 60 -and -not (Test-Path $env:RADIO_FLYOUT_LOG); $i++) {
-          Start-Sleep -Milliseconds 250
-        }
-        if (Test-Path $env:RADIO_FLYOUT_LOG) {
-          "click ($name):"
-          Get-Content $env:RADIO_FLYOUT_LOG | ForEach-Object { "click: $_" }
-          & appveyor PushArtifact $env:RADIO_FLYOUT_LOG -FileName $name | Out-Null
-        } else {
-          "no click log for ${name}: the panel never finished its self-test"
-        }
+      $env:RADIO_FLYOUT_LOG = Join-Path $env:TEMP 'click.log'
+      Remove-Item $env:RADIO_FLYOUT_LOG -ErrorAction SilentlyContinue
+      Start-Process -FilePath 'target\release\radio.exe' -WorkingDirectory (Get-Location).Path -Wait
+      for ($i = 0; $i -lt 60 -and -not (Test-Path $env:RADIO_FLYOUT_LOG); $i++) {
+        Start-Sleep -Milliseconds 250
       }
-      Run-Self 'click.log' $false
-      Run-Self 'click-noflyout.log' $true
-      Remove-Item Env:RADIO_FLYOUT_DEMO, Env:RADIO_FLYOUT_CLICK, Env:RADIO_FLYOUT_LOG, Env:RADIO_NO_FLYOUT
+      if (Test-Path $env:RADIO_FLYOUT_LOG) {
+        "click:"
+        Get-Content $env:RADIO_FLYOUT_LOG | ForEach-Object { "click: $_" }
+        & appveyor PushArtifact $env:RADIO_FLYOUT_LOG -FileName 'click.log' | Out-Null
+      } else {
+        "no click log: the panel never finished its self-test"
+      }
+      Remove-Item Env:RADIO_FLYOUT_DEMO, Env:RADIO_FLYOUT_CLICK, Env:RADIO_FLYOUT_LOG
   # Start the app before pausing. Typing into the session over RDP is unreliable
   # (the worker's keymap mangles punctuation, and keystrokes land wherever focus
   # is on the client), so the tray icon has to be there on arrival: log in and
