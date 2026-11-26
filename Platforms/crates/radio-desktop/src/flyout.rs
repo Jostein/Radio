@@ -35,10 +35,11 @@ use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     CallWindowProcW, CreateWindowExW, DefWindowProcW, DestroyWindow, GetClientRect, GetCursorPos,
     GetForegroundWindow, GetSystemMetrics, GetWindowLongPtrW, GetWindowRect, GetWindowTextLengthW,
-    GetWindowTextW, RegisterClassW, SendMessageW, SetCursorPos, SetForegroundWindow,
+    GetWindowTextW, LoadCursorW, RegisterClassW, SendMessageW, SetCursorPos, SetForegroundWindow,
     SetWindowLongPtrW, SetWindowPos, SetWindowTextW, ShowWindow, SystemParametersInfoW,
     CS_DROPSHADOW, ES_AUTOHSCROLL,
-    ES_LEFT, GWLP_USERDATA, GWLP_WNDPROC, HWND_TOPMOST, SM_CXSCREEN, SM_CYSCREEN, SPI_GETWORKAREA,
+    ES_LEFT, GWLP_USERDATA, GWLP_WNDPROC, HWND_TOPMOST, IDC_ARROW, SM_CXSCREEN, SM_CYSCREEN,
+    SPI_GETWORKAREA,
     SWP_NOACTIVATE, SWP_NOZORDER, SWP_SHOWWINDOW, SW_HIDE, SW_SHOW, WA_INACTIVE, WM_ACTIVATE,
     WM_CHAR, WM_COMMAND, WM_CTLCOLOREDIT, WM_ERASEBKGND, WM_KEYDOWN, WM_KILLFOCUS, WM_LBUTTONDOWN,
     WM_LBUTTONUP, WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_PAINT, WM_SETFOCUS, WM_SETFONT, WNDCLASSW,
@@ -244,6 +245,10 @@ impl Panel {
             class.style = CS_DROPSHADOW;
             class.lpfnWndProc = Some(window_proc);
             class.hInstance = instance;
+            // Without a class cursor the panel never sets the pointer shape, so
+            // the busy pointer Windows shows when the tray icon is clicked stays
+            // over the opened panel until the mouse leaves it.
+            class.hCursor = LoadCursorW(std::ptr::null_mut(), IDC_ARROW);
             class.lpszClassName = class_name.as_ptr();
             // A second instance of the class is harmless: the panel attaches to
             // whichever registration won.
