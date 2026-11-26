@@ -351,11 +351,14 @@ impl Player {
 
         // A live stream that stops delivering samples is stuck. The fill level is
         // not a signal: a device that drains eagerly keeps the buffer empty while
-        // playing fine, so this watches the sample counter instead.
+        // playing fine, so this watches the sample counter instead. An HLS
+        // segment lasts four seconds, so a single slow reload looks exactly like
+        // a stall; waiting two segments keeps a healthy stream alive where one
+        // would be torn down and tuned in again.
         let pushed = self.audio.pushed();
         if pushed == self.last_pushed {
             self.stalled_ticks += 1;
-            if self.stalled_ticks >= 4 {
+            if self.stalled_ticks >= 8 {
                 self.handle_failure("The stream stopped sending audio.".to_string());
             }
         } else {
