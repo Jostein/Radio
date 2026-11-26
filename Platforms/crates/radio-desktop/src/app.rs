@@ -1,9 +1,15 @@
 use crate::icon;
 use crate::media::{self, Controls, Snapshot};
+#[cfg(target_os = "linux")]
 use crate::menu::{self, Handles};
 use crate::player::{Player, State};
-use radio_core::{search, store::Store};
+use radio_core::store::Store;
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+use radio_core::search;
+#[cfg(target_os = "windows")]
+use radio_core::title;
 use std::time::{Duration, Instant, SystemTime};
+#[cfg(target_os = "linux")]
 use tray_icon::menu::MenuEvent;
 use tray_icon::TrayIcon;
 
@@ -11,18 +17,24 @@ pub struct App {
     store: Store,
     player: Player,
     tray: TrayIcon,
+    #[cfg(target_os = "linux")]
     handles: Handles,
     media: Controls,
     /// The Windows flyout a left click opens. `None` when the window could not be
-    /// created, in which case the menu is the only front end, as before.
+    /// created, which leaves the icon with nothing to open.
     #[cfg(target_os = "windows")]
     panel: Option<crate::flyout::Panel>,
+    #[cfg(target_os = "linux")]
     last_header: String,
+    #[cfg(target_os = "linux")]
     last_track: String,
+    #[cfg(target_os = "linux")]
     last_toggle: String,
+    #[cfg(target_os = "linux")]
     last_volume: String,
     last_tooltip: String,
     last_look: icon::Look,
+    #[cfg(target_os = "linux")]
     last_current: Option<String>,
     saved_mtime: Option<SystemTime>,
     last_file_check: Instant,
@@ -38,16 +50,15 @@ impl App {
         let audio = crate::audio::Audio::start_or_silent(volume);
         let player = Player::new(audio, volume);
 
+        // Linux has no flyout: its tray menu is the front end, and appindicator
+        // requires one. Windows opens the panel from the icon instead.
+        #[cfg(target_os = "linux")]
         let built = menu::build(&store, &player);
         let builder = tray_icon::TrayIconBuilder::new()
-            .with_menu(Box::new(built.menu))
             .with_tooltip("Radio")
             .with_icon(icon::tray_icon(icon::Look::Idle)?);
-        // On Windows a left click opens the flyout and the right button opens
-        // this menu; the crate shows the menu on right click either way. The
-        // other platforms keep the menu on both, so they are left alone.
-        #[cfg(target_os = "windows")]
-        let builder = builder.with_menu_on_left_click(false);
+        #[cfg(target_os = "linux")]
+        let builder = builder.with_menu(Box::new(built.menu));
         let tray = builder
             .build()
             .map_err(|error| format!("The tray icon could not be created: {error}"))?;
@@ -55,35 +66,35 @@ impl App {
         let saved_mtime = store.modified();
         let media = Controls::start(Snapshot::from_player(&player, store.volume));
 
-        // A panel that cannot be made must not keep the app from starting: the
-        // menu still does everything, so this is reported and walked past.
+        // A panel that cannot be made must not keep the app from starting, but
+        // it leaves the tray icon with nothing to open, so it is said out loud.
         #[cfg(target_os = "windows")]
-        let panel_off = std::env::var_os("RADIO_NO_FLYOUT").is_some();
+        let panel = crate::flyout::Panel::new();
         #[cfg(target_os = "windows")]
-        let panel = if panel_off {
-            None
-        } else {
-            crate::flyout::Panel::new()
-        };
-        #[cfg(target_os = "windows")]
-        if panel.is_none() && !panel_off {
-            eprintln!("radio: the flyout panel is off; the tray menu still works");
+        if panel.is_none() {
+            eprintln!("radio: the flyout panel could not be created; the tray icon will do nothing");
         }
 
         let mut app = App {
             store,
             player,
             tray,
+            #[cfg(target_os = "linux")]
             handles: built.handles,
             media,
             #[cfg(target_os = "windows")]
             panel,
+            #[cfg(target_os = "linux")]
             last_header: String::new(),
+            #[cfg(target_os = "linux")]
             last_track: String::new(),
+            #[cfg(target_os = "linux")]
             last_toggle: String::new(),
+            #[cfg(target_os = "linux")]
             last_volume: String::new(),
             last_tooltip: String::new(),
             last_look: icon::Look::Idle,
+            #[cfg(target_os = "linux")]
             last_current: None,
             saved_mtime,
             last_file_check: Instant::now(),
@@ -131,6 +142,7 @@ impl App {
     /// One turn of the app loop. Cheap; called every few tens of milliseconds.
     pub fn pump(&mut self) {
         self.recover_after_wake();
+        #[cfg(target_os = "linux")]
         self.handle_menu_events();
         self.handle_media();
         #[cfg(target_os = "windows")]
@@ -160,7 +172,10 @@ impl App {
         }
     }
 
-    fn handle_menu_events(&mut self) {        while let Ok(event) = MenuEvent::receiver().try_recv() {
+    /// The Linux tray menu, which is the only front end there.
+    #[cfg(target_os = "linux")]
+    fn handle_menu_events(&mut self) {
+        while let Ok(event) = MenuEvent::receiver().try_recv() {
             let id = event.id.0.clone();
 
             match id.as_str() {
@@ -189,15 +204,6 @@ impl App {
                                 self.player.play(station);
                             }
                         }
-                    }
-                }
-                #[cfg(target_os = "windows")]
-                menu::FIND_STATIONS => {
-                    let answer = crate::find::find_station();
-                    self.last_tick = SystemTime::now();
-                    if let Some(station) = answer {
-                        self.store.add(station);
-                        self.rebuild();
                     }
                 }
                 menu::OPEN_STATIONS => {
@@ -240,8 +246,8 @@ impl App {
         }
     }
 
-    /// The desktop's media widget sends the same actions the menu does, so both
-    /// front ends are handled in one place.
+    /// The desktop's media widget sends the same actions the panel does, so both
+    /// are handled in one place.
     fn handle_media(&mut self) {
         let actions: Vec<media::Action> = self.media.poll();
         for action in actions {
@@ -261,14 +267,16 @@ impl App {
         }
     }
 
+    /// The menu's Louder and Quieter; the flyout has a slider instead.
+    #[cfg(target_os = "linux")]
     fn change_volume(&mut self, delta: f64) {
         let volume = (self.store.volume + delta).clamp(0.0, 1.0);
         self.store.set_volume(volume);
         self.player.set_volume(volume as f32);
     }
 
-    /// A left click on the tray icon opens or closes the flyout. The menu stays on
-    /// the right button, where `tray-icon` shows it whatever we do here.
+    /// A left click on the tray icon opens or closes the flyout, which is the
+    /// whole front end on Windows.
     #[cfg(target_os = "windows")]
     fn handle_tray_clicks(&mut self) {
         use tray_icon::{MouseButton, MouseButtonState, TrayIconEvent};
@@ -394,7 +402,12 @@ impl App {
                 .map(|station| station.title.clone())
                 .unwrap_or_default(),
             status: self.player.state.description(),
-            detail: menu::track_text(&self.player),
+            detail: self
+                .player
+                .title
+                .as_deref()
+                .map(title::row)
+                .unwrap_or_default(),
             volume: self.store.volume,
             rows: self
                 .store
@@ -522,6 +535,9 @@ impl App {
         }
     }
 
+    /// The track row opens the search the macOS app does; both front ends offer
+    /// it, and a build with no front end has nothing to click.
+    #[cfg(any(target_os = "linux", target_os = "windows"))]
     fn open_track_search(&self) {
         let Some(title) = self.player.title.as_deref() else {
             return;
@@ -534,6 +550,39 @@ impl App {
     /// Pushes changed text into the existing items. Rebuilding is reserved for
     /// changes in structure (the station list), which are rare.
     fn sync(&mut self) {
+        #[cfg(target_os = "linux")]
+        self.sync_menu();
+
+        let tooltip = match (&self.player.current, &self.player.title) {
+            (Some(station), Some(track)) => format!("Radio — {} — {track}", station.title),
+            (Some(station), None) => format!("Radio — {} — {}", station.title, self.player.state.description()),
+            _ => "Radio".to_string(),
+        };
+        let look = match self.player.state {
+            State::Connecting | State::Playing => icon::Look::Playing,
+            State::Reconnecting(_) => icon::Look::Reconnecting,
+            State::Idle | State::Paused | State::Failed(_) => icon::Look::Idle,
+        };
+        if look != self.last_look {
+            if let Ok(drawn) = icon::tray_icon(look) {
+                let _ = self.tray.set_icon(Some(drawn));
+            }
+            self.last_look = look;
+        }
+
+        if tooltip != self.last_tooltip {
+            let _ = self.tray.set_tooltip(Some(tooltip.clone()));
+            self.last_tooltip = tooltip;
+        }
+
+        self.media
+            .update(Snapshot::from_player(&self.player, self.store.volume));
+    }
+
+    /// The Linux menu's items carry the state; Windows draws the flyout from
+    /// `panel_content` each turn instead.
+    #[cfg(target_os = "linux")]
+    fn sync_menu(&mut self) {
         let header = menu::header_text(&self.player);
         if header != self.last_header {
             self.handles.header.set_text(&header);
@@ -569,31 +618,6 @@ impl App {
             }
             self.last_current = current_id;
         }
-
-        let tooltip = match (&self.player.current, &self.player.title) {
-            (Some(station), Some(track)) => format!("Radio — {} — {track}", station.title),
-            (Some(station), None) => format!("Radio — {} — {}", station.title, self.player.state.description()),
-            _ => "Radio".to_string(),
-        };
-        let look = match self.player.state {
-            State::Connecting | State::Playing => icon::Look::Playing,
-            State::Reconnecting(_) => icon::Look::Reconnecting,
-            State::Idle | State::Paused | State::Failed(_) => icon::Look::Idle,
-        };
-        if look != self.last_look {
-            if let Ok(drawn) = icon::tray_icon(look) {
-                let _ = self.tray.set_icon(Some(drawn));
-            }
-            self.last_look = look;
-        }
-
-        if tooltip != self.last_tooltip {
-            let _ = self.tray.set_tooltip(Some(tooltip.clone()));
-            self.last_tooltip = tooltip;
-        }
-
-        self.media
-            .update(Snapshot::from_player(&self.player, self.store.volume));
     }
 
     /// Stations can also be edited in the JSON file, so a change there is picked
@@ -615,14 +639,17 @@ impl App {
     }
 
     fn rebuild(&mut self) {
-        let built = menu::build(&self.store, &self.player);
-        self.tray.set_menu(Some(Box::new(built.menu)));
-        self.handles = built.handles;
-        self.last_header.clear();
-        self.last_track.clear();
-        self.last_toggle.clear();
-        self.last_volume.clear();
-        self.last_current = None;
+        #[cfg(target_os = "linux")]
+        {
+            let built = menu::build(&self.store, &self.player);
+            self.tray.set_menu(Some(Box::new(built.menu)));
+            self.handles = built.handles;
+            self.last_header.clear();
+            self.last_track.clear();
+            self.last_toggle.clear();
+            self.last_volume.clear();
+            self.last_current = None;
+        }
         self.sync();
     }
 }

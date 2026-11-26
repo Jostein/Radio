@@ -4,8 +4,8 @@
 //! icon and nothing else, its own flyouts and Quick Settings are closed to
 //! third-party controls, and a popup menu cannot host a slider or a text field at
 //! all. So this panel is ours: one borderless window, drawn with GDI, with a real
-//! volume slider, a search field and the station list. Right click still opens
-//! the native menu, which stays the complete list of commands.
+//! volume slider, a search field and the station list. It is the whole front end
+//! on Windows; the tray icon has no menu behind it.
 //!
 //! Deliberately Windows-only. macOS keeps AppKit's menu and Linux keeps its GTK
 //! indicator menu; neither grows a window for this. Everything runs on the app
@@ -78,7 +78,7 @@ pub struct Content {
     pub rows: Vec<Row>,
     pub current: Option<String>,
     /// Whether playback is currently active, so the toggle button can read
-    /// "Pause" or "Play" the way the menu's toggle item does.
+    /// "Pause" or "Play" the way the macOS app's toggle item does.
     pub active: bool,
 }
 
@@ -183,7 +183,7 @@ struct State {
     sticky: bool,
 }
 
-/// The panel window. `None` from `new` means the app keeps only the native menu.
+/// The panel window. `None` from `new` means the tray icon has nothing to open.
 pub struct Panel {
     state: *mut State,
 }

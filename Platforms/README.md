@@ -129,10 +129,10 @@ Platforms/
     title.rs                     track row text and truncation
     search.rs                    YouTube search URL
   crates/radio-desktop/          the tray app
-    app.rs                       store + player + menu wiring, file watching
+    app.rs                       store + player + front end wiring, file watching
     audio.rs                     cpal output, ffmpeg PCM pump
     player.rs                    state machine, reconnect backoff, watchdog
-    menu.rs                      tray menu
+    menu.rs                      Linux tray menu (Windows opens flyout.rs)
     media.rs                     media front end: one vocabulary, per-OS backend
     mpris.rs                     Linux: the desktop's media widget (D-Bus)
     smtc.rs                      Windows: SMTC, media keys and the flyout
@@ -257,7 +257,8 @@ for playback and sound — and 4 only as far as pause: resume and rejoining the
 live edge have not. On Windows, 1 and the reconnect state in 5 have been seen;
 2 reached that state but no sound was heard, and 3, 4, 6 and 7 are untested:
 
-1. The tray icon appears and the menu opens.
+1. The tray icon appears and its front end opens — the panel on Windows, the
+   menu on Linux.
 2. A station plays (the default is FIP Reggae, which is an `.m3u8` and therefore
    exercises the ffmpeg path).
 3. The track row fills in. FIP uses a built-in feed, so this proves the feed
@@ -272,10 +273,10 @@ live edge have not. On Windows, 1 and the reconnect state in 5 have been seen;
 
 Three things to watch for, because they are the parts most likely to need a fix:
 
-- On Windows the tray is created just before the message pump starts. Its menu
-  did open on AppVeyor, so that ordering works there; if clicks ever do nothing,
-  moving the tray into the loop remains the first thing to try — the `muda`
-  docs are explicit that a running event loop is required on that platform.
+- On Windows the tray is created just before the message pump starts, and the
+  panel opens from that same loop. If tray clicks ever do nothing, moving the
+  tray into the loop remains the first thing to try — the `muda` docs are
+  explicit that a running event loop is required on that platform.
 - A pause during a slow metadata read clears the track row when that read
   finishes, which can be up to 8 s later. The macOS app answers instantly
   because its reads are asynchronous.
@@ -291,12 +292,12 @@ Three things to watch for, because they are the parts most likely to need a fix:
 |---|---|---|
 | Menu bar / tray only | yes | yes |
 | Stations by URL + title | dialog | dialog (GTK on Linux, Win32 on Windows), same validation |
-| Find stations by name (Radio Browser) | yes | Windows: Find Stations… menu; Linux: not yet |
-| Volume | slider, persisted | Louder / Quieter items, persisted |
+| Find stations by name (Radio Browser) | yes | Windows: Find Stations… in the panel; Linux: not yet |
+| Volume | slider, persisted | slider in the Windows panel, Louder / Quieter items on Linux |
 | ICY, feeds, discovery | yes | yes (same rules, same caps) |
 | HLS | AVPlayer | ffmpeg |
 | Reconnect with backoff | 1–30 s, 6 attempts | same |
-| Stall watchdog | 5 s × 4 | 1 s × 4 on a stalled sample counter |
+| Stall watchdog | 5 s × 4 | 1 s × 8 on a stalled sample counter |
 | Pause keeps track, resume rejoins live | yes | yes |
 | Sleep/wake recovery | yes | yes, by noticing a turn that arrives late |
 | Title suggested from the stream | yes | yes (same rules, same fallback) |

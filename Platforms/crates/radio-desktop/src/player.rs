@@ -98,6 +98,7 @@ impl Player {
         )
     }
 
+    #[cfg(any(target_os = "linux", target_os = "windows"))]
     pub fn play(&mut self, station: Station) {
         self.generation += 1;
         self.monitor.stop(true);

@@ -6,8 +6,9 @@ use std::time::Duration;
 /// There is no window, so there is no toolkit event loop to host the tray in.
 /// Each platform needs its own idle loop: GTK's on Linux (libappindicator
 /// delivers menu clicks through it), a plain message pump on Windows (the tray
-/// needs one for menu commands), and a bare sleep anywhere else so the core can
-/// be compiled and poked at on a development machine.
+/// icon's clicks and the flyout's messages arrive through it), and a bare sleep
+/// anywhere else so the core can be compiled and poked at on a development
+/// machine.
 pub fn run() -> Result<(), String> {
     #[cfg(target_os = "linux")]
     {
