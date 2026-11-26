@@ -261,18 +261,23 @@ impl Player {
                 };
 
                 match resolved {
-                    Ok(stream) => match audio::spawn_ffmpeg(stream.as_str(), sample_rate, channels) {
-                        Ok(child) => {
-                            let _ = sender.send(Worker::Ready {
-                                generation,
-                                child,
-                                url: stream.to_string(),
-                            });
+                    Ok(stream) => {
+                        // ffmpeg plays the first HLS rendition, the lowest
+                        // quality one; Apple players climb to the best.
+                        let stream = playlist::preferred(&stream);
+                        match audio::spawn_ffmpeg(stream.as_str(), sample_rate, channels) {
+                            Ok(child) => {
+                                let _ = sender.send(Worker::Ready {
+                                    generation,
+                                    child,
+                                    url: stream.to_string(),
+                                });
+                            }
+                            Err(message) => {
+                                let _ = sender.send(Worker::Failed { generation, message });
+                            }
                         }
-                        Err(message) => {
-                            let _ = sender.send(Worker::Failed { generation, message });
-                        }
-                    },
+                    }
                     Err(message) => {
                         let _ = sender.send(Worker::Failed { generation, message });
                     }

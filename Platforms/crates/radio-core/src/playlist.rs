@@ -15,6 +15,11 @@ pub fn is_playlist(url: &Url) -> bool {
 }
 
 pub fn resolve(url: &Url) -> Result<Url, String> {
+    let text = fetch(url)?;
+    stream_in(&text, url).ok_or_else(|| "The playlist did not contain a stream URL.".to_string())
+}
+
+fn fetch(url: &Url) -> Result<String, String> {
     let response = ureq::get(url.as_str())
         .set("User-Agent", USER_AGENT)
         .timeout(Duration::from_secs(10))
@@ -28,8 +33,62 @@ pub fn resolve(url: &Url) -> Result<Url, String> {
         .read_to_end(&mut body)
         .map_err(|error| format!("The playlist could not be read ({error})."))?;
 
-    let text = String::from_utf8_lossy(&body);
-    stream_in(&text, url).ok_or_else(|| "The playlist did not contain a stream URL.".to_string())
+    Ok(String::from_utf8_lossy(&body).into_owned())
+}
+
+fn is_hls(url: &Url) -> bool {
+    url.path().to_ascii_lowercase().ends_with(".m3u8")
+}
+
+/// The address to actually play. An HLS master playlist offers several
+/// renditions and ffmpeg takes the first one, which is the lowest quality;
+/// Apple players climb to the best, so pick the highest-bandwidth variant.
+/// Anything else, or a failed fetch, plays as given.
+pub fn preferred(url: &Url) -> Url {
+    if !is_hls(url) {
+        return url.clone();
+    }
+    fetch(url)
+        .ok()
+        .and_then(|text| variant_in(&text, url))
+        .unwrap_or_else(|| url.clone())
+}
+
+/// The highest-bandwidth `#EXT-X-STREAM-INF` rendition, resolved against the
+/// playlist. Media playlists list no renditions and answer `None`.
+fn variant_in(text: &str, base: &Url) -> Option<Url> {
+    let lines: Vec<&str> = text.lines().map(str::trim).collect();
+    let mut best: Option<(u64, Url)> = None;
+
+    for (index, line) in lines.iter().enumerate() {
+        let Some(attributes) = line.strip_prefix("#EXT-X-STREAM-INF:") else {
+            continue;
+        };
+        let Some(bandwidth) = bandwidth_in(attributes) else {
+            continue;
+        };
+        let Some(uri) = lines
+            .get(index + 1)
+            .filter(|next| !next.is_empty() && !next.starts_with('#'))
+        else {
+            continue;
+        };
+        let Ok(url) = base.join(uri) else {
+            continue;
+        };
+        if best.as_ref().map_or(true, |(current, _)| bandwidth > *current) {
+            best = Some((bandwidth, url));
+        }
+    }
+
+    best.map(|(_, url)| url)
+}
+
+fn bandwidth_in(attributes: &str) -> Option<u64> {
+    attributes
+        .split(',')
+        .find_map(|pair| pair.trim().strip_prefix("BANDWIDTH="))
+        .and_then(|value| value.trim().parse().ok())
 }
 
 fn stream_in(text: &str, base: &Url) -> Option<Url> {
@@ -112,6 +171,29 @@ mod tests {
     fn keeps_hls_playlists() {
         let text = "#EXTM3U\n#EXT-X-VERSION:3\n";
         assert_eq!(stream_in(text, &base()).unwrap(), base());
+    }
+
+    #[test]
+    fn picks_the_highest_hls_variant() {
+        let text = "#EXTM3U\n\
+            #EXT-X-STREAM-INF:PROGRAM-ID=0,BANDWIDTH=107000,CODECS=\"mp4a.40.2\"\n\
+            low.m3u8\n\
+            #EXT-X-STREAM-INF:PROGRAM-ID=0,BANDWIDTH=280000,CODECS=\"mp4a.40.2\"\n\
+            https://cdn.example.com/high.m3u8\n\
+            #EXT-X-STREAM-INF:BANDWIDTH=185000\n\
+            mid.m3u8\n";
+        let base = Url::parse("https://example.com/radio/master.m3u8").unwrap();
+        assert_eq!(
+            variant_in(text, &base).unwrap().as_str(),
+            "https://cdn.example.com/high.m3u8"
+        );
+    }
+
+    #[test]
+    fn media_playlists_have_no_variant() {
+        let text = "#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXTINF:4,\nseg1.aac\n";
+        let base = Url::parse("https://example.com/radio/index.m3u8").unwrap();
+        assert!(variant_in(text, &base).is_none());
     }
 
     #[test]
