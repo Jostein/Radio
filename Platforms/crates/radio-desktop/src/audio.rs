@@ -439,6 +439,14 @@ pub fn spawn_ffmpeg(url: &str, sample_rate: u32, channels: u16) -> Result<Child,
         .stdout(Stdio::piped())
         .stderr(Stdio::null());
 
+    // ffmpeg is a console program and this app is not, so without this every
+    // play opens a console window over the flyout. Linux has no such window.
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    }
+
     command.spawn().map_err(|error| {
         if error.kind() == std::io::ErrorKind::NotFound {
             "ffmpeg is required for playback but was not found next to the app or on PATH."
