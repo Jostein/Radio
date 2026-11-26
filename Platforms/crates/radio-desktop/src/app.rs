@@ -58,9 +58,15 @@ impl App {
         // A panel that cannot be made must not keep the app from starting: the
         // menu still does everything, so this is reported and walked past.
         #[cfg(target_os = "windows")]
-        let panel = crate::flyout::Panel::new();
+        let panel_off = std::env::var_os("RADIO_NO_FLYOUT").is_some();
         #[cfg(target_os = "windows")]
-        if panel.is_none() {
+        let panel = if panel_off {
+            None
+        } else {
+            crate::flyout::Panel::new()
+        };
+        #[cfg(target_os = "windows")]
+        if panel.is_none() && !panel_off {
             eprintln!("radio: the flyout panel is off; the tray menu still works");
         }
 
