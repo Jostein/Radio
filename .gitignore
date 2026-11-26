@@ -8,3 +8,5 @@ NOTES.local.md
 .appveyor-token
 .rdp/
 dist/
+Platforms/windows/bin/
+Platforms/windows/obj/

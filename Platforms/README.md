@@ -1,5 +1,9 @@
 # Radio for Linux and Windows
 
+> **Windows now has a native front end of its own:** [`windows/`](windows/README.md)
+> is a WinUI 3 app — the tray, the panel and the media stack are all Windows'.
+> The Rust code below remains the Linux app and the shared core of both.
+
 The Linux and Windows side of the app: one shared Rust codebase, the same
 behaviour as the macOS build in the repository root. A tray icon instead of a
 menu bar item, MPRIS or SMTC instead of Now Playing, `~/.config/Radio` or
