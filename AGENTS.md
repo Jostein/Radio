@@ -7,7 +7,8 @@ The macOS app in the repository root is the reference implementation.
 
 The tray, its flyout and playback need an interactive Windows desktop. GitHub's
 runners have none, so the interactive test runs on AppVeyor, whose free worker
-can pause a build for Remote Desktop.
+can pause a build for Remote Desktop. When the Parallels VM on the external SSD
+is attached that is the faster path; see *The local Windows VM* below.
 
 One command, from the repository root:
 
@@ -92,6 +93,59 @@ Traps in that path, both fixed but easy to reintroduce:
 
 The capture runs before the RDP client connects, so the first picture is the
 worker's 1024x768 desktop; later ones follow the session's real size.
+
+### The local Windows VM
+
+A Parallels VM named `Windows 11` holds a real Windows desktop with audio, which
+is quicker than waiting for a worker. It lives on an external SSD, so it is only
+around while that disk is plugged in; AppVeyor stays the fallback.
+
+Run everything as the logged-in user:
+
+```
+prlctl exec "Windows 11" --current-user <command>
+```
+
+Traps, all learned the hard way:
+
+- **Without `--current-user` the command runs as SYSTEM in session 0**, where a
+  tray app has no desktop and nothing appears. `Unable to open new session`
+  usually means "Isolate Mac from Windows" was switched on: `prlctl set
+  "Windows 11" --isolate-vm off`. Leave isolation off while testing.
+- **Every `prlctl exec` leaves a console window in the guest**, and a console in
+  front means the flyout hides as soon as it opens (`WA_INACTIVE`). Run click
+  scripts through `wscript run.vbs script.ps1` — hidden, no console — and have
+  them write what happened to a file, read back with `cmd /c type`.
+- **Long inline PowerShell fails intermittently** (`Unable to open new
+  session`), and quoting through `prlctl exec` to `cmd` to PowerShell strips the
+  quotes you meant. Put the script on disk and run it by path.
+- **UI Automation rectangles are physical pixels**, 2× the logical screen, so
+  divide by 2 before `SetCursorPos`. The tray lays itself out again whenever an
+  icon appears, so look the Radio icon up with UIA each run instead of keeping
+  coordinates.
+- **An icon in the overflow closes the popup on the next activation change**, so
+  clicking it programmatically is a coin toss. Promote it once
+  (`NotifyIconSettings\…\IsPromoted=1`), restart Explorer, then restart the app —
+  without the app restart it has no icon at all after `TaskbarCreated`.
+- **`prlctl capture "Windows 11" --file shot.png` is 2940×1846** for the
+  1470×923 desktop; halve to reason in logical pixels. `sips -Z 900 -s format
+  jpeg` makes it small enough to look at.
+- **The guest display sleeps anyway**; `powercfg /change monitor-timeout-ac 0`
+  is not enough. A hidden PowerShell holding `SetThreadExecutionState` keeps it
+  awake for the session.
+- **Deploy loop:** build with the mingw target, serve the binary from the Mac's
+  Parallels adapter (`python3 -m http.server 8765 --bind 10.211.55.2` from
+  `.rdp/`), `Invoke-WebRequest` it into `%TEMP%`, then `Start-Process`. ffmpeg
+  must sit beside `radio.exe` or be on `PATH`; compare both sides' SHA-256
+  before trusting a run, since the file size can repeat across builds.
+- **Which stream is playing** is `Get-CimInstance Win32_Process -Filter "Name =
+  'ffmpeg.exe'"` and its `CommandLine` — that is how the HLS variant was
+  confirmed.
+- **Playback cannot be started from the self-test:** `RADIO_FLYOUT_DEMO` +
+  `RADIO_FLYOUT_CLICK` exits before the worker spawns ffmpeg. Leaving audio
+  playing needs a real click on a row.
+- **ffmpeg is a console program.** Spawn it with `CREATE_NO_WINDOW`; without it
+  every play opened a console that took focus and hid the flyout.
 
 ### Branch
 
