@@ -18,7 +18,6 @@ internal sealed class Tray : IDisposable
     private const uint NIF_MESSAGE = 0x01;
     private const uint NIF_ICON = 0x02;
     private const uint NIF_TIP = 0x04;
-    private const uint NIF_GUID = 0x20;
     private const uint NIF_INFO = 0x10;
     private const uint NIIF_INFO = 0x1;
     private const uint IMAGE_ICON = 1;
@@ -34,13 +33,19 @@ internal sealed class Tray : IDisposable
     private const int WM_RBUTTONUP = 0x0205;
     private const int NIN_BALLOONUSERCLICK = 0x0405;
 
-    private static readonly IntPtr HwndMessage = new(-3);
     /// <summary>
-    /// A GUID is how Windows will say where the icon ended up: the tray
-    /// rearranges itself as icons come and go, so a remembered position is
-    /// wrong by the time the next click happens.
+    /// A hidden top-level window, not a message-only one: Explorer announces
+    /// "TaskbarCreated" with a broadcast, and broadcasts are not delivered to
+    /// message-only windows, so the icon would never come back after a restart.
     /// </summary>
-    private static readonly Guid IconGuid = new("83a2f0b3-7f61-4f37-9d5c-3f2c0e5a71bd");
+    private static readonly IntPtr NoParent = IntPtr.Zero;
+    /// <summary>
+    /// The icon is identified by this window plus <see cref="IconId"/>, not by a
+    /// GUID. A GUID would be a new icon to the shell: a fresh registry entry,
+    /// back in the overflow, and whatever the user chose about it is lost. This
+    /// identity is the one the shell already knows.
+    /// </summary>
+    private const uint IconId = 1;
 
     private readonly WndProc proc;
     private IntPtr window;
@@ -67,7 +72,7 @@ internal sealed class Tray : IDisposable
         };
         RegisterClassW(ref windowClass);
 
-        window = CreateWindowExW(0, className, "Radio", 0, 0, 0, 0, 0, HwndMessage, IntPtr.Zero, instance, IntPtr.Zero);
+        window = CreateWindowExW(0, className, "Radio", 0, 0, 0, 0, 0, NoParent, IntPtr.Zero, instance, IntPtr.Zero);
         if (window == IntPtr.Zero)
         {
             return;
@@ -121,7 +126,7 @@ internal sealed class Tray : IDisposable
         }
 
         var data = Data();
-        data.uFlags = NIF_GUID | NIF_INFO;
+        data.uFlags = NIF_INFO;
         data.szInfoTitle = title;
         data.szInfo = text;
         data.dwInfoFlags = NIIF_INFO;
@@ -186,12 +191,11 @@ internal sealed class Tray : IDisposable
     {
         cbSize = (uint)Marshal.SizeOf<NOTIFYICONDATAW>(),
         hWnd = window,
-        uID = 1,
-        uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP | NIF_GUID,
+        uID = IconId,
+        uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP,
         uCallbackMessage = CallbackMessage,
         hIcon = icon,
         szTip = "Radio",
-        guidItem = IconGuid,
     };
 
     /// <summary>Where the icon is on screen, or null when the tray will not say.</summary>
@@ -202,12 +206,13 @@ internal sealed class Tray : IDisposable
             return null;
         }
 
+        // No GUID here either; with guidItem left null the shell uses the
+        // window and id, which is what the icon was registered with.
         var identity = new NOTIFYICONIDENTIFIER
         {
             cbSize = (uint)Marshal.SizeOf<NOTIFYICONIDENTIFIER>(),
             hWnd = window,
-            uID = 1,
-            guidItem = IconGuid,
+            uID = IconId,
         };
         return Shell_NotifyIconGetRect(ref identity, out var rect) == 0
             ? new Windows.Graphics.RectInt32(rect.Left, rect.Top, rect.Right - rect.Left, rect.Bottom - rect.Top)

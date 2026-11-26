@@ -23,7 +23,7 @@ and the tray icon appears.
 
 | Piece | File | Notes |
 | --- | --- | --- |
-| Tray icon | `Tray.cs` | `Shell_NotifyIcon` through a message-only window, plus the right-click menu. Re-adds the icon when Explorer restarts. |
+| Tray icon | `Tray.cs` | `Shell_NotifyIcon` through a hidden window, plus the right-click menu. Re-adds the icon when Explorer restarts. It is registered by window and id, not by a GUID: to the shell a GUID is a different icon, with none of what the user chose about the old one. |
 | Panel | `FlyoutWindow.cs` | Borderless always-on-top window, positioned above the tray and closed when it loses focus. |
 | Playback | `Player.cs` | `MediaPlayer` with `CommandManager` enabled, which is what puts the station in the Windows 11 media flyout. Media Foundation decodes MP3, AAC, Ogg and HLS, so **no ffmpeg is needed or shipped**. |
 | Playlists | `Playlist.cs` | `.pls` and `.m3u` are resolved to their first entry; `.m3u8` goes to Media Foundation, which picks the best rendition. |
@@ -39,7 +39,8 @@ worker.
 Checked in the Parallels Windows 11 VM (26100, 200% scaling):
 
 - builds from clean with the .NET 8 SDK alone: 0 warnings, 0 errors;
-- the tray icon registers and survives an Explorer restart;
+- the tray icon registers and survives an Explorer restart, still next to the
+  clock where the user had put it;
 - the panel draws as a Fluent card: station row, volume slider, accent
   play button and Add Station, correct size at 200% scaling;
 - on first run only, it says where the tray switch is (a notification off the
